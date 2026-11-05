@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+pipeline/data.npz
+pipeline/meta.json
+pipeline/predictions.npz
+pipeline/metrics_summary.json
+pipeline/train_metrics.json
+pipeline/validation_results.json
+interface/result.html

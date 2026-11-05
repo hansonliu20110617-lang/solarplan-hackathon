@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Validation Results</title>
+<style>
+  body {
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+    max-width: 760px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    color: #1a1a1a;
+    background: #ffffff;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  #summary {
+    font-size: 1.1rem;
+    background: #f4f6f8;
+    border: 1px solid #d8dde2;
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+    margin: 1rem 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    border: 1px solid #d8dde2;
+    padding: 0.4rem 0.6rem;
+    text-align: right;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { background: #eef1f4; }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  footer {
+    margin-top: 1.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #d8dde2;
+    font-size: 0.85rem;
+    color: #555;
+  }
+  .error-note { color: #b00020; }
+</style>
+</head>
+<body>
+  <h1>Validation Results</h1>
+  <div id="summary">Loading...</div>
+  <table id="cases-table">
+    <thead>
+      <tr><th>id</th><th>true</th><th>pred</th><th>error</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <footer id="provenance"></footer>
+
+<script>
+window.RESULTS_DATA = __RESULTS_JSON__;
+
+(function () {
+  var data = window.RESULTS_DATA;
+  var summaryEl = document.getElementById("summary");
+  var tbody = document.querySelector("#cases-table tbody");
+  var footerEl = document.getElementById("provenance");
+
+  if (!data) {
+    summaryEl.textContent = "No results data found.";
+    return;
+  }
+
+  function fmt(n) {
+    return (typeof n === "number") ? n.toFixed(4) : String(n);
+  }
+
+  summaryEl.innerHTML =
+    "Validated " + data.n_cases + " case(s) against independent ground truth &mdash; " +
+    "median error: <strong>" + fmt(data.median_error) + "</strong>, " +
+    "95th percentile error: <strong>" + fmt(data.p95_error) + "</strong>, " +
+    "worst case: <strong class=\"error-note\">" + fmt(data.worst_error) + "</strong>.";
+
+  (data.cases || []).forEach(function (c) {
+    var row = document.createElement("tr");
+    [c.id, fmt(c.true), fmt(c.pred), fmt(c.error)].forEach(function (val) {
+      var cell = document.createElement("td");
+      cell.textContent = val;
+      row.appendChild(cell);
+    });
+    tbody.appendChild(row);
+  });
+
+  var provenance = data.provenance || {};
+  footerEl.innerHTML =
+    "<strong>How this was validated:</strong> " + (data.source || "unknown source") + ". " +
+    (provenance.predictions_source ? "Predictions from " + provenance.predictions_source + ". " : "") +
+    (provenance.note || "");
+})();
+</script>
+</body>
+</html>
