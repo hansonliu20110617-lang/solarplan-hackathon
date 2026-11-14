@@ -72,10 +72,12 @@ line to a clean result:
 
 **Data:** NASA POWER daily readings, 2005–2024 (20 years), for the 3 core
 cities (Phoenix AZ – sunny/stable, Seattle WA – cloudy/volatile, Chicago IL –
-continental/frontal) plus 7 more for the generalization study (Denver,
-Miami, Minneapolis, Albuquerque, Houston, Los Angeles, Boston — chosen for
-climate diversity: desert, tropical, snowy continental, high-altitude,
-humid subtropical, Mediterranean, coastal).
+continental/frontal), 7 more for the generalization study (Denver, Miami,
+Minneapolis, Albuquerque, Houston, Los Angeles, Boston — chosen for climate
+diversity: desert, tropical, snowy continental, high-altitude, humid
+subtropical, Mediterranean, coastal), and 3 added later specifically to
+test and fix the generalization gaps found (Honolulu, Tampa, Portland — see
+*Generalization*).
 
 **Clear-sky index, not raw kWh.** The model predicts tomorrow's actual solar
 ÷ a *climatological* clear-sky ceiling for that location and calendar day —
@@ -103,9 +105,10 @@ non-trivial literature baseline, not a weak strawman.
 latitude, longitude (continuous, not a one-hot city flag — see
 *Generalization*), and day-of-year as sin/cos. **Model:** a small
 from-scratch numpy MLP (64→32 hidden, ReLU, manual Adam), early-stopped on
-validation loss. A plain closed-form linear regression never beat the
-baseline in any city/fold checked, so the wins below need real
-nonlinearity, not just more features.
+validation loss. A closed-form ridge-regression baseline on the same
+features also beats smart persistence (see the sanity check in *Results*)
+— so the features themselves carry most of the signal, and the MLP's
+nonlinearity adds a real but modest further edge, not the entire win.
 
 **Validation:** walk-forward across ten independent folds (test years
 2015–2024, 3-city scope), each a full train/val/test split with an
@@ -393,7 +396,7 @@ and matters more the more serial correlation there is within a test year.
 ## Sources
 
 - [NASA POWER](https://power.larc.nasa.gov/) — daily solar/weather data,
-  10 US cities, 2005–2024
+  13 US cities, 2005–2024
 - [EIA](https://www.eia.gov/energyexplained/electricity/prices-and-factors-affecting-prices.php) —
   2024 US average residential electricity price (16.5¢/kWh)
 - Veritas AI Hackathon 2026 Project Briefs, §4.3.1 — starting point, the
@@ -424,7 +427,7 @@ and matters more the more serial correlation there is within a test year.
 ## Repo structure / how to reproduce
 
 ```
-data/              raw NASA POWER CSVs, 10 cities, 2005-2024 (committed, so
+data/              raw NASA POWER CSVs, 13 cities, 2005-2024 (committed, so
                    the pipeline runs offline with no re-download)
 pipeline/
   prepare_solar_data.py    builds features/target (clear-sky index), splits
@@ -441,13 +444,19 @@ interface/
 run_pipeline.py            runs the single "official" fold_2024 demo
                            (3-city scope, trained on 2005-2022)
 run_walkforward.py         runs all ten 3-city folds (2015-2024) + sign
-                           test -- produces the Results tables above
+                           test and paired t-test -- produces the Results
+                           tables above
+run_ridge_baseline.py      swaps closed-form ridge regression into the
+                           shipped pipeline as a sanity check against the
+                           MLP -- produces the ridge-vs-MLP table above
 run_leave_one_city_out.py  the first (confounded) 10-city generalization
                            check -- superseded by run_learning_curve.py
                            below, kept for the record
-run_learning_curve.py      the properly controlled generalization check
-                           (Miami held out, 2/5/9 training cities, 27 runs)
-                           -- produces the Generalization tables above
+run_learning_curve.py      the properly controlled generalization check,
+                           parameterized by --holdout-city (run for Miami,
+                           Phoenix, Seattle, Minneapolis: 2/5/9 training
+                           cities, 27 runs each) -- produces the
+                           Generalization tables above
 ```
 
 Run the official 3-city demo with:
@@ -463,10 +472,11 @@ then open `interface/result.html`. Run the full ten-fold walk-forward
 python run_walkforward.py
 ```
 
-Run the controlled generalization study (longer — 27 training runs):
+Run the controlled generalization study (longer — 27 training runs per
+holdout city):
 
 ```
-python run_learning_curve.py
+python run_learning_curve.py --holdout-city miami    # or phoenix/seattle/minneapolis
 ```
 
 No installs beyond numpy (Python's standard library handles CSV parsing and
