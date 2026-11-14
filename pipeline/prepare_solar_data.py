@@ -160,8 +160,10 @@ def _climatological_clrsky(rows, train_years):
     Mar 1 otherwise), so day-of-year silently averages together different
     calendar dates across leap/non-leap years -- (month, day) has no such
     problem. Feb 29 itself only has training data in years when a leap year
-    falls inside train_years; otherwise it falls back to the overall
-    average, same as any other sparse/missing key."""
+    falls inside train_years; see _clrsky_lookup for what happens when it
+    doesn't (falling back to the overall annual average would badly distort
+    a winter day's value -- caught by review: Seattle's annual mean clear
+    sky is much higher than its February value)."""
     by_date = {}
     for row in rows:
         if row["year"] not in train_years:
@@ -178,6 +180,25 @@ def _climatological_clrsky(rows, train_years):
         )
     overall_fallback = float(np.mean([v for vals in by_date.values() for v in vals]))
     return {md: float(np.mean(vals)) for md, vals in by_date.items()}, overall_fallback
+
+
+def _clrsky_lookup(clim_clrsky, month, day, fallback):
+    """Look up a (month, day) climatology value. Feb 29 specifically falls
+    back to a Feb-28/Mar-1 neighbor average instead of the global annual
+    mean, which would badly distort a winter day's value -- the ONLY
+    calendar date expected to ever be legitimately missing from a
+    multi-year training window (every other date appears every single
+    year). Peer review correctly caught an earlier version of this that
+    applied the Feb 28/Mar 1 fallback to ANY missing date, which would have
+    wrongly given a wintertime denominator to some other season's date in
+    the (very unlikely) event its own readings were entirely missing --
+    that general case still falls back to the honest annual average."""
+    if (month, day) in clim_clrsky:
+        return clim_clrsky[(month, day)]
+    if (month, day) != (2, 29):
+        return fallback
+    neighbors = [v for v in (clim_clrsky.get((2, 28)), clim_clrsky.get((3, 1))) if v is not None]
+    return float(np.mean(neighbors)) if neighbors else fallback
 
 
 def _climatological_monthly_profile(rows, train_years, clim_clrsky, clim_fallback):
@@ -204,7 +225,7 @@ def _climatological_monthly_profile(rows, train_years, clim_clrsky, clim_fallbac
         # project's actual numbers since none of our cities had missing
         # readings, but wrong in general).
         if np.isfinite(row["sw"]) and row["sw"] > MISSING_SENTINEL:
-            ceiling = clim_clrsky.get((d.month, d.day), clim_fallback)
+            ceiling = _clrsky_lookup(clim_clrsky, d.month, d.day, clim_fallback)
             csi_by_month[d.month].append(np.clip(row["sw"] / ceiling, *CSI_CLIP))
         if np.isfinite(row["rh2m"]) and row["rh2m"] > MISSING_SENTINEL:
             rh_by_month[d.month].append(row["rh2m"])
@@ -244,8 +265,8 @@ def _build_examples(rows, location_feature, clim_clrsky, clim_fallback):
         if any(not np.isfinite(v) or v <= MISSING_SENTINEL for v in values):
             continue
 
-        today_ceiling = clim_clrsky.get((today_date.month, today_date.day), clim_fallback)
-        tomorrow_ceiling = clim_clrsky.get((tomorrow_date.month, tomorrow_date.day), clim_fallback)
+        today_ceiling = _clrsky_lookup(clim_clrsky, today_date.month, today_date.day, clim_fallback)
+        tomorrow_ceiling = _clrsky_lookup(clim_clrsky, tomorrow_date.month, tomorrow_date.day, clim_fallback)
 
         today_csi = np.clip(today["sw"] / today_ceiling, *CSI_CLIP)
         tomorrow_csi = np.clip(tomorrow["sw"] / tomorrow_ceiling, *CSI_CLIP)

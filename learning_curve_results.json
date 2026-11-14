@@ -1,0 +1,416 @@
+[
+  {
+    "train_size": 2,
+    "draw_idx": 0,
+    "init_seed": 0,
+    "training_cities": [
+      "seattle",
+      "phoenix"
+    ],
+    "model_decision_accuracy": 0.4180327868852459,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -4.184282363367751
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 0,
+    "init_seed": 1,
+    "training_cities": [
+      "seattle",
+      "phoenix"
+    ],
+    "model_decision_accuracy": 0.453551912568306,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -10.595511929805987
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 0,
+    "init_seed": 2,
+    "training_cities": [
+      "seattle",
+      "phoenix"
+    ],
+    "model_decision_accuracy": 0.546448087431694,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -9.108581015709412
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 1,
+    "init_seed": 0,
+    "training_cities": [
+      "minneapolis",
+      "denver"
+    ],
+    "model_decision_accuracy": 0.5655737704918032,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -7.225787681296017
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 1,
+    "init_seed": 1,
+    "training_cities": [
+      "minneapolis",
+      "denver"
+    ],
+    "model_decision_accuracy": 0.453551912568306,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -15.821263858370237
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 1,
+    "init_seed": 2,
+    "training_cities": [
+      "minneapolis",
+      "denver"
+    ],
+    "model_decision_accuracy": 0.45901639344262296,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -3.973131217613828
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 2,
+    "init_seed": 0,
+    "training_cities": [
+      "denver",
+      "chicago"
+    ],
+    "model_decision_accuracy": 0.453551912568306,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -34.16778793943274
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 2,
+    "init_seed": 1,
+    "training_cities": [
+      "denver",
+      "chicago"
+    ],
+    "model_decision_accuracy": 0.453551912568306,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -23.725653559033464
+  },
+  {
+    "train_size": 2,
+    "draw_idx": 2,
+    "init_seed": 2,
+    "training_cities": [
+      "denver",
+      "chicago"
+    ],
+    "model_decision_accuracy": 0.453551912568306,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -17.317959336595408
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 0,
+    "init_seed": 0,
+    "training_cities": [
+      "seattle",
+      "boston",
+      "minneapolis",
+      "denver",
+      "phoenix"
+    ],
+    "model_decision_accuracy": 0.644808743169399,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -2.899776519953048
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 0,
+    "init_seed": 1,
+    "training_cities": [
+      "seattle",
+      "boston",
+      "minneapolis",
+      "denver",
+      "phoenix"
+    ],
+    "model_decision_accuracy": 0.6420765027322405,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.7342637828231691
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 0,
+    "init_seed": 2,
+    "training_cities": [
+      "seattle",
+      "boston",
+      "minneapolis",
+      "denver",
+      "phoenix"
+    ],
+    "model_decision_accuracy": 0.7896174863387978,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.33433118809565654
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 1,
+    "init_seed": 0,
+    "training_cities": [
+      "phoenix",
+      "seattle",
+      "losangeles",
+      "houston",
+      "minneapolis"
+    ],
+    "model_decision_accuracy": 0.7459016393442623,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.12998126839072266
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 1,
+    "init_seed": 1,
+    "training_cities": [
+      "phoenix",
+      "seattle",
+      "losangeles",
+      "houston",
+      "minneapolis"
+    ],
+    "model_decision_accuracy": 0.7978142076502732,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.38095336977271566
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 1,
+    "init_seed": 2,
+    "training_cities": [
+      "phoenix",
+      "seattle",
+      "losangeles",
+      "houston",
+      "minneapolis"
+    ],
+    "model_decision_accuracy": 0.7103825136612022,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.6462343306118621
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 2,
+    "init_seed": 0,
+    "training_cities": [
+      "phoenix",
+      "denver",
+      "albuquerque",
+      "houston",
+      "minneapolis"
+    ],
+    "model_decision_accuracy": 0.6666666666666666,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.4832036692807322
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 2,
+    "init_seed": 1,
+    "training_cities": [
+      "phoenix",
+      "denver",
+      "albuquerque",
+      "houston",
+      "minneapolis"
+    ],
+    "model_decision_accuracy": 0.5628415300546448,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -1.451423355026618
+  },
+  {
+    "train_size": 5,
+    "draw_idx": 2,
+    "init_seed": 2,
+    "training_cities": [
+      "phoenix",
+      "denver",
+      "albuquerque",
+      "houston",
+      "minneapolis"
+    ],
+    "model_decision_accuracy": 0.592896174863388,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -1.7271827447095114
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 0,
+    "init_seed": 0,
+    "training_cities": [
+      "houston",
+      "denver",
+      "losangeles",
+      "minneapolis",
+      "chicago",
+      "phoenix",
+      "boston",
+      "seattle",
+      "albuquerque"
+    ],
+    "model_decision_accuracy": 0.7978142076502732,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.05719823493960274
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 0,
+    "init_seed": 1,
+    "training_cities": [
+      "houston",
+      "denver",
+      "losangeles",
+      "minneapolis",
+      "chicago",
+      "phoenix",
+      "boston",
+      "seattle",
+      "albuquerque"
+    ],
+    "model_decision_accuracy": 0.8169398907103825,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.058836252581620174
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 0,
+    "init_seed": 2,
+    "training_cities": [
+      "houston",
+      "denver",
+      "losangeles",
+      "minneapolis",
+      "chicago",
+      "phoenix",
+      "boston",
+      "seattle",
+      "albuquerque"
+    ],
+    "model_decision_accuracy": 0.8306010928961749,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.14244401105672133
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 1,
+    "init_seed": 0,
+    "training_cities": [
+      "minneapolis",
+      "chicago",
+      "seattle",
+      "losangeles",
+      "phoenix",
+      "boston",
+      "houston",
+      "denver",
+      "albuquerque"
+    ],
+    "model_decision_accuracy": 0.7978142076502732,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.05719823493960274
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 1,
+    "init_seed": 1,
+    "training_cities": [
+      "minneapolis",
+      "chicago",
+      "seattle",
+      "losangeles",
+      "phoenix",
+      "boston",
+      "houston",
+      "denver",
+      "albuquerque"
+    ],
+    "model_decision_accuracy": 0.8169398907103825,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.058836252581620174
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 1,
+    "init_seed": 2,
+    "training_cities": [
+      "minneapolis",
+      "chicago",
+      "seattle",
+      "losangeles",
+      "phoenix",
+      "boston",
+      "houston",
+      "denver",
+      "albuquerque"
+    ],
+    "model_decision_accuracy": 0.8306010928961749,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.14244401105672133
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 2,
+    "init_seed": 0,
+    "training_cities": [
+      "albuquerque",
+      "minneapolis",
+      "houston",
+      "phoenix",
+      "denver",
+      "boston",
+      "seattle",
+      "losangeles",
+      "chicago"
+    ],
+    "model_decision_accuracy": 0.7978142076502732,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.05719823493960274
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 2,
+    "init_seed": 1,
+    "training_cities": [
+      "albuquerque",
+      "minneapolis",
+      "houston",
+      "phoenix",
+      "denver",
+      "boston",
+      "seattle",
+      "losangeles",
+      "chicago"
+    ],
+    "model_decision_accuracy": 0.8169398907103825,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.058836252581620174
+  },
+  {
+    "train_size": 9,
+    "draw_idx": 2,
+    "init_seed": 2,
+    "training_cities": [
+      "albuquerque",
+      "minneapolis",
+      "houston",
+      "phoenix",
+      "denver",
+      "boston",
+      "seattle",
+      "losangeles",
+      "chicago"
+    ],
+    "model_decision_accuracy": 0.8306010928961749,
+    "baseline_decision_accuracy": 0.8442622950819673,
+    "skill_score": -0.14244401105672133
+  }
+]

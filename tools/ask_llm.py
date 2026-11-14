@@ -122,9 +122,15 @@ def ask(provider, prompt, model=None, quality=False):
 
     if provider == "gemini":
         url = cfg["url"].format(model=model, key=key)
+        # thinkingBudget=-1 (dynamic/unlimited) is what kept truncating real
+        # reviews: thinking can consume the ENTIRE maxOutputTokens budget
+        # before producing any visible output (observed: 4798 of 5000 tokens
+        # on thinking, 198 left for the actual answer -> cut off mid-word).
+        # A fixed, bounded thinking budget guarantees room is left over.
+        thinking_budget = 3000 if quality else 0
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens, "thinkingConfig": {"thinkingBudget": -1 if quality else 0}},
+            "generationConfig": {"maxOutputTokens": max_tokens, "thinkingConfig": {"thinkingBudget": thinking_budget}},
         }
         data = _post(url, {"Content-Type": "application/json"}, payload)
         um = data.get("usageMetadata", {})

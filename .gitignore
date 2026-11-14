@@ -16,5 +16,5 @@ pipeline/validation_results_10city_in_distribution.json
 pipeline/impact_estimate.json
 walkforward_summary.json
 leave_one_city_out_summary.json
-learning_curve_results.json
+learning_curve_results_*.json
 interface/result.html
