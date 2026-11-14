@@ -291,11 +291,17 @@ fix with just one matched city.
 own monthly climatological CSI, instead of the absolute CSI level — the
 top-ranked fix from the same review, on the reasoning that the seasonal
 shape should come from the data, not be learned from 9 other cities' shapes)
-made things modestly **worse**, not better, in a single-seed test:
-skill −0.057 → −0.209, decision accuracy 79.8% → 77.6% (same 9 training
-cities, same seed, same holdout). One seed isn't enough to call this
-conclusively worse rather than noise, but it's the opposite direction we
-expected, and it's reported as-is rather than re-run until it looks better.
+made things **substantially worse**, not better, confirmed across 3 seeds
+(same 9 training cities, same holdout each time):
+
+| | seed 0 | seed 1 | seed 2 | Mean |
+|---|---|---|---|---|
+| Absolute (shipped) | −0.057 | −0.059 | −0.142 | **−0.086** |
+| Anomaly | −0.209 | −0.802 | −0.215 | **−0.409** |
+
+This is the opposite of what the review predicted, and it's reported as-is
+rather than re-run until it looks better. Anomaly mode is also visibly less
+stable across seeds (one run collapsed to −0.80), not just worse on average.
 A plausible reason: anomaly framing throws away *today's* absolute CSI level
 as a feature, and for a city whose day-to-day variance is itself unusually
 large (Miami's wet season), that level carries real information the
@@ -355,9 +361,8 @@ Get genuine archived day-ahead forecasts (with real, verified lead time,
 unlike Open-Meteo's archive) to attack the storm-front failure case, which
 nothing in this project currently can see coming. On the generalization
 side: a systematic single-city-swap search (not just the one Tampa test)
-to see which other training-city changes help or hurt Miami and Seattle,
-and more multi-seed confirmation of the single-seed anomaly-target-mode
-result. We also added a paired t-test alongside the sign test for the
+to see which other training-city changes help or hurt Miami and Seattle.
+We also added a paired t-test alongside the sign test for the
 walk-forward comparison (it's what caught Phoenix's real-but-easy-to-miss
 effect — see Results); a further step would be a true per-day
 Diebold-Mariano test with autocorrelation-robust (HAC) variance on the

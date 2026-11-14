@@ -18,4 +18,5 @@ walkforward_summary.json
 leave_one_city_out_summary.json
 learning_curve_results_*.json
 ridge_validation_results.json
+anomaly_mode_confirmation.json
 interface/result.html
