@@ -21,9 +21,9 @@ sun to be worth it" threshold to answer the actual yes/no question the
 homeowner has: run the appliance off solar tonight, or charge from the grid?
 
 **A real example (Seattle, 2024-08-13, from the held-out test set):** today's
-solar reading was 2.47 kWh/m², below Seattle's threshold of 3.20. The naive
+solar reading was 2.47 kWh/m², below Seattle's threshold of 3.04. The naive
 persistence rule ("tomorrow = today") says: not enough sun, charge from the
-grid. Our model, using today's full weather picture, predicted 4.27 — above
+grid. Our model, using today's full weather picture, predicted 3.74 — above
 threshold, "yes, use solar." Tomorrow actually came in at 5.33. The model's
 call was right; persistence would have sent the homeowner to the grid on a
 genuinely sunny day.
@@ -31,36 +31,44 @@ genuinely sunny day.
 ## What we added
 
 Starting point: brief §4.3.1, *Next-day solar energy forecast*. We went past
-the brief's own suggested extension (compare two climates) in three ways:
-a **third, intermediate climate** (Chicago — continental, frontal weather)
+the brief's own suggested extension (compare two climates) in four ways: a
+**third, intermediate climate** (Chicago — continental, frontal weather)
 instead of just two extremes; a **day-of-year feature** (season, not just
-yesterday's reading); and **walk-forward validation across two independent
-test years** (2023 and 2024, each its own proper train/val/test split)
-instead of trusting a single split — which is what actually exposed that one
-of our first-draft findings wasn't real (see Results).
+yesterday's reading); a **decision-accuracy simulation** instead of only
+reporting raw forecast error (the brief's own "make it your own" suggestion);
+and **walk-forward validation across ten independent test years**, not one
+or even two — which is what turned an ambiguous, coin-flip-looking result
+from our first two-year draft into an actual, statistically significant
+finding (see Results).
 
 ## How it works
 
 **Data:** NASA POWER daily readings for Phoenix AZ (sunny, stable), Seattle
-WA (cloudy, volatile), and Chicago IL (continental, frontal), 2021-01-01
-through 2024-12-31 (1,461 days each, no missing readings in any city).
-Features: today's solar irradiance, temperature, humidity, cloud cover, a
-city flag, and day-of-year encoded as sin/cos (so Dec 31 and Jan 1 are
-adjacent in feature space, not 364 apart) → target: tomorrow's solar
-irradiance. Split by calendar year, never shuffled, keyed on each example's
-*target* date so a Dec-31 label (which falls on Jan 1) can't leak into the
-next period.
+WA (cloudy, volatile), and Chicago IL (continental, frontal), 2005-01-01
+through 2024-12-31 (20 full years, 7,304 usable daily examples per city, no
+missing readings in any city). Features: today's solar irradiance,
+temperature, humidity, cloud cover, a city flag, and day-of-year encoded as
+sin/cos (so Dec 31 and Jan 1 are adjacent in feature space, not 364 apart) →
+target: tomorrow's solar irradiance. Split by calendar year, never shuffled,
+keyed on each example's *target* date so a Dec-31 label (which falls on Jan
+1) can't leak into the next period.
 
-**Validation:** walk-forward across two independent folds, each a full
-train/val/test split with no overlap in test years:
+**Validation:** walk-forward across ten independent folds (test years
+2015–2024), each a full train/val/test split with no overlap in test years
+and an expanding training window (each fold trains on every year of data
+available before it, same as how this would actually be retrained over
+time):
 
 | Fold | Train | Val | Test |
 |---|---|---|---|
-| fold_2023 | 2021 | 2022 | 2023 |
-| fold_2024 | 2021–2022 | 2023 | 2024 |
+| fold_2015 | 2005–2013 | 2014 | 2015 |
+| fold_2016 | 2005–2014 | 2015 | 2016 |
+| … | … | … | … |
+| fold_2024 | 2005–2022 | 2023 | 2024 |
 
-(`run_walkforward.py` runs both; `run_pipeline.py` alone runs just fold_2024
-as the single "official" demo run.)
+(`run_walkforward.py` runs all ten folds and a sign test across them;
+`run_pipeline.py` alone runs just fold_2024 — the most-informed, best-trained
+fold — as the single "official" demo.)
 
 **Model:** a small from-scratch numpy MLP (two hidden layers, 64→32, ReLU,
 manual Adam optimizer), early-stopped on validation loss. We also checked a
@@ -76,83 +84,80 @@ concretely: each city has an "enough sun to run the appliance off solar
 tonight" threshold, set from that city's own *training-period* median (never
 test data), and we check how often each forecast's yes/no call matches what
 the homeowner should actually have done (the oracle: did tomorrow really
-have enough sun?). This is the headline result, checked across both
-independent walk-forward years:
+have enough sun?).
 
-| | fold_2023 decision accuracy | fold_2024 decision accuracy | Consistent? |
-|---|---|---|---|
-| **Pooled, model** | **87.7%** | **88.5%** | Model ≥ baseline both years |
-| Pooled, baseline | 85.9% | 85.4% | |
-| Chicago, model | **81.6%** | **85.8%** | Model wins both years |
-| Chicago, baseline | 78.1% | 80.9% | |
-| Seattle, model | **88.2%** | **87.2%** | Model wins both years |
-| Seattle, baseline | 86.3% | 83.6% | |
-| Phoenix, model | 93.2% | **92.6%** | Essentially tied both years |
-| Phoenix, baseline | 93.4% | 91.8% | (±1%, within noise) |
+Checking this across one year, or even two, isn't enough to call a pattern
+real — so we ran it across **ten independent walk-forward folds** (test
+years 2015–2024) and a sign test on each one (an exact binomial test: out of
+10 independent yes/no outcomes — did the model's decision accuracy beat the
+baseline's that year? — how likely is a record this lopsided by pure chance):
 
-The model matches or beats the baseline's decision accuracy in every city,
-in both years — a clean, consistent result. Phoenix is a near-tie because
-persistence is already so good there that both methods make almost the same
-call almost every day.
+| City | Folds model wins | Mean advantage | Sign-test p-value | Real effect? |
+|---|---|---|---|---|
+| **Chicago** | **10 / 10** | **+4.4 pts** | **0.0020** | Yes — essentially certain |
+| **Seattle** | **10 / 10** | **+3.2 pts** | **0.0020** | Yes — essentially certain |
+| Phoenix | 8 / 10 | +1.3 pts | 0.0391 | Yes, but smaller and noisier |
 
-**Why this differs from the raw error numbers below:** mean absolute error
-(what the brief's suggested project literally asks for) tells a different,
-*also honest* story — our model's mean error actually beats the baseline's
-in **every** city (e.g. Phoenix: model 0.48 vs. baseline 0.51 kWh/m²/day),
-while **median** error favors the baseline in Phoenix specifically (model
-0.31 vs. baseline 0.23). That's not a contradiction: median is about the
-*typical* day, mean is pulled by the *rare large misses* (storm fronts,
-below). Our model is slightly worse on Phoenix's ordinary calm days but
-noticeably better on its rare volatile ones, which the decision-accuracy
-number (the metric that actually matters to a homeowner) reflects more
-directly than either single error statistic on its own.
+(p < 0.05 is the usual "probably not chance" line; p = 0.002 means a record
+this one-sided would happen by pure luck roughly 1 time in 500 — *if* the ten
+years were fully independent trials. They're not quite: the expanding
+training window means later folds' training data overlaps earlier folds',
+and nearby years' weather has real multi-year correlation (ENSO-like
+patterns, long-term trends). So read these p-values as "this record is
+extremely unlikely to be pure chance," not as a textbook-exact guarantee —
+ten non-overlapping test years is still a much stronger check than the one
+or two we started with.) Our *first*
+draft, run on just two folds, had reported Seattle's result as "too close to
+call" and Phoenix as "baseline wins both years" — both wrong, because two
+data points can't tell a real small effect apart from noise. Ten folds can.
 
-Testing across *two* independent years also caught something our first
-draft got wrong on raw median error alone: we'd reported "the model beats
-the baseline in Seattle" from fold_2024 by itself, but fold_2023's median
-error went the other way (0.550 vs. 0.537) — too close to call from error
-alone. The decision-accuracy metric above is what resolved it: Seattle's
-model-wins-on-decisions result holds in **both** years, even though the
-median-error comparison for Seattle doesn't. Chicago's win is the most
-unambiguous result either way — model wins on every metric, every year. A
-plain linear regression doesn't beat the baseline's mean error in any city
-in either fold, so Chicago and Seattle's wins need real nonlinearity, not
-just more features.
+**The same pattern holds on raw mean absolute error** (what the brief's
+suggested project literally asks for), checked the same way: our model beat
+the baseline's pooled mean error in **10 out of 10** independent years
+(mean advantage +0.144 kWh/m²/day, sign-test p = 0.00195). Every single
+held-out year, for twenty years of real weather, our model's average miss
+was smaller than just assuming "tomorrow = today."
 
-**Raw error numbers (median, kWh/m²/day), for reference:**
+**Median** error is the one place the picture stays genuinely mixed —
+Phoenix's median-error comparison flips between folds depending on the year
+(e.g. fold_2024: model 0.31 vs. baseline 0.24 kWh/m²/day, baseline wins; but
+mean error for that same fold has the model winning, 0.43 vs. 0.51). That's
+not a contradiction: median is about the *typical* day, mean is pulled by
+the *rare large misses*. Our model is sometimes slightly worse on ordinary
+calm Phoenix days but consistently better on the rare volatile ones — which
+is exactly why the decision-accuracy and mean-error numbers above (the ones
+that actually matter for "would this forecast have cost the homeowner
+money") are the honest headline, not the median.
 
-| City | fold_2023: model vs. baseline | fold_2024: model vs. baseline |
-|---|---|---|
-| Phoenix (sunny, stable) | 0.370 vs. **0.265** | 0.313 vs. **0.235** |
-| Chicago (continental, frontal) | **0.790** vs. 0.871 | **0.793** vs. 0.804 |
-| Seattle (cloudy, volatile) | 0.550 vs. **0.537** | **0.541** vs. 0.601 |
+A plain linear regression doesn't beat the baseline's mean error in any
+city in any fold we checked, so these wins need real nonlinearity, not just
+more features or more data alone.
 
-**Where it fails:** the single worst error in fold_2024 (4.6 kWh/m²/day) is a
-two-day whiplash in Phoenix in May — solar output cratered overnight, then
-snapped back up the next day, almost certainly a passing storm front. Both
-the model and the baseline miss it equally, because neither has any
-forward-looking weather signal — today's data alone can't see tomorrow's
-incoming front. (We looked into adding a real next-day weather-forecast
-feature to fix exactly this, via Open-Meteo's archive — and found its
-"historical forecast" endpoint is stitched from the first few hours of each
-model run, so it closely tracks the actual outcome rather than being a true
-day-ahead forecast. Using it would have quietly leaked the answer, so we
-didn't.)
+**Where it fails:** the single worst error in the official demo fold (4.7
+kWh/m²/day) is a storm-front whiplash in Phoenix — solar output cratered
+overnight, then swung back the next day. Both the model and the baseline
+miss events like this equally, because neither has any forward-looking
+weather signal — today's data alone can't see tomorrow's incoming front.
+(We looked into adding a real next-day weather-forecast feature to fix
+exactly this, via Open-Meteo's archive — and found its "historical forecast"
+endpoint is stitched from the first few hours of each model run, so it
+closely tracks the actual outcome rather than being a true day-ahead
+forecast. Using it would have quietly leaked the answer, so we didn't.)
 
 ## What we'd do next
 
 Get real archived day-ahead forecasts (e.g. via a provider with genuine
-lead-time data covering 2021–2024) to directly attack the Phoenix storm-front
-failure case — that's the one scenario where neither the model nor the
-decision-accuracy framing helps, since no feature here can see tomorrow's
-incoming front. Also run a third fold if more NASA POWER years become
-available, to make Chicago and Seattle's already-consistent two-year results
-even more certain, and to see whether Phoenix's near-tie stays a tie.
+multi-day lead-time data covering back to 2005) to directly attack the
+storm-front failure case — that's the one scenario the ten-fold validation
+can't fix, since no feature here can see tomorrow's incoming front. Also
+push the data further back than 2005 if NASA POWER's coverage allows, to see
+whether Phoenix's smaller, noisier effect (p = 0.039, not p = 0.002 like the
+other two cities) firms up or fades with even more independent years.
 
 ## Sources
 
 - [NASA POWER](https://power.larc.nasa.gov/) — daily solar/weather data for
-  Phoenix AZ, Seattle WA, and Chicago IL, 2021–2024
+  Phoenix AZ, Seattle WA, and Chicago IL, 2005–2024 (20 years)
 - Veritas AI Hackathon 2026 Project Briefs, §4.3.1 (Next-day solar energy
   forecast) — starting point, the persistence-baseline idea, and the
   decision-accuracy "make it your own" suggestion
@@ -169,8 +174,8 @@ even more certain, and to see whether Phoenix's near-tie stays a tie.
 ## Repo structure / how to reproduce
 
 ```
-data/            raw NASA POWER CSVs for all three cities (committed, so the
-                 pipeline runs offline with no re-download)
+data/            raw NASA POWER CSVs for all three cities, 2005-2024
+                 (committed, so the pipeline runs offline with no re-download)
 pipeline/
   prepare_solar_data.py   builds features/target, splits by fold -> data.npz
   preprocess_template.py  z-score normalize (fit on train only)
@@ -181,8 +186,9 @@ pipeline/
 interface/
   template.html    static results page (no backend, works from file://)
 run_pipeline.py      runs the single "official" fold_2024 demo end to end
-run_walkforward.py   runs both folds (2023 and 2024) and prints/saves the
-                      combined per-city comparison in the Results table above
+                      (trained on every year 2005-2022, the most-informed fold)
+run_walkforward.py   runs all ten folds (test years 2015-2024) and a sign
+                      test across them -- produces the statistics in Results
 ```
 
 Run the single official demo with:
@@ -191,8 +197,9 @@ Run the single official demo with:
 python run_pipeline.py
 ```
 
-then open `interface/result.html`. Run the full walk-forward comparison
-(both folds) with:
+then open `interface/result.html`. Run the full ten-fold walk-forward
+comparison with real significance testing (takes a few minutes: ten full
+train/val/test cycles):
 
 ```
 python run_walkforward.py

@@ -16,8 +16,10 @@ yesterday's single noisy reading.
 Train/val/test years are CLI-configurable (--train-years/--val-years/
 --test-years, comma-separated) so run_walkforward.py can run this multiple
 times with different fold boundaries without duplicating this file. Defaults
-reproduce the original single-fold split: train=2021-2022, val=2023,
-test=2024.
+reproduce the "official" single-fold demo (run_pipeline.py): train on every
+year of data we have before the held-out period, train=2005-2022, val=2023,
+test=2024 -- the most-informed version of the model, same as the last and
+best-trained fold in the 10-fold walk-forward.
 
 Split membership is keyed on the TARGET (tomorrow's) date, not today's -- a
 Dec-31 training example's label is Jan-1 of the next year, and keying on
@@ -121,7 +123,8 @@ def _parse_years(s):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--train-years", default="2021,2022")
+    ap.add_argument("--train-years", default="2005,2006,2007,2008,2009,2010,2011,2012,2013,"
+                                              "2014,2015,2016,2017,2018,2019,2020,2021,2022")
     ap.add_argument("--val-years", default="2023")
     ap.add_argument("--test-years", default="2024")
     args = ap.parse_args()
