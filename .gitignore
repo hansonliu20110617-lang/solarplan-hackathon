@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
+.env
+peer_review_results.json
 pipeline/data.npz
+pipeline/test_meta.npz
 pipeline/meta.json
 pipeline/predictions.npz
 pipeline/metrics_summary.json

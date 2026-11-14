@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent
 PIPELINE = ROOT / "pipeline"
 
 STAGES = [
-    ("simulate", PIPELINE / "simulate_template.py"),
+    ("prepare_data", PIPELINE / "prepare_solar_data.py"),
     ("preprocess", PIPELINE / "preprocess_template.py"),
     ("train", PIPELINE / "train_template.py"),
     ("validate", PIPELINE / "validate_template.py"),
