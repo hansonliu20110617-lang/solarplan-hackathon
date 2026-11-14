@@ -1,28 +1,43 @@
 """
 Replaces simulate_template.py for the real track: AI + Climate, next-day solar
-forecast, compared across two climates (Phoenix AZ = sunny/predictable,
-Seattle WA = cloudy/volatile). Real NASA POWER daily data, no API key.
+forecast, compared across three climates (Phoenix AZ = sunny/stable, Chicago
+IL = continental/frontal, Seattle WA = cloudy/volatile). Real NASA POWER
+daily data, no API key.
 
 Feature row (today) -> target (tomorrow's solar):
-  [solar_today, temp_today, humidity_today, cloud_today, is_seattle] -> solar_tomorrow
+  [solar_today, temp_today, humidity_today, cloud_today,
+   is_seattle, is_chicago, doy_sin, doy_cos] -> solar_tomorrow
 
-Split by calendar year, never shuffled (brief's rule for time-series data):
-  train = 2021-2022, val = 2023, test = 2024. Split membership is keyed on
-  the TARGET (tomorrow's) date, not today's -- a Dec-31 training example's
-  label is Jan-1 of the next year, and keying on today's date would put that
-  label inside the held-out period (the model's training loss would then be
-  supervised by a value dated inside validation/test, a real if small form
-  of the leakage the brief itself warns judges watch for).
+day-of-year is encoded as sin/cos (not the raw integer) so Dec 31 and Jan 1
+are adjacent in feature space instead of 364 apart -- solar output depends
+heavily on season, which persistence captures only indirectly through
+yesterday's single noisy reading.
+
+Train/val/test years are CLI-configurable (--train-years/--val-years/
+--test-years, comma-separated) so run_walkforward.py can run this multiple
+times with different fold boundaries without duplicating this file. Defaults
+reproduce the original single-fold split: train=2021-2022, val=2023,
+test=2024.
+
+Split membership is keyed on the TARGET (tomorrow's) date, not today's -- a
+Dec-31 training example's label is Jan-1 of the next year, and keying on
+today's date would put that label inside the held-out period (the model's
+training loss would then be supervised by a value dated inside
+validation/test, a real if small form of the leakage the brief itself warns
+judges watch for).
+
 Writes data.npz in the exact schema preprocess_template.py/train_template.py
 already expect, so those two stages need zero changes. Also writes
-test_meta.npz (city/date/baseline_pred per test row, same order as X_test)
-so validate_template.py can report the persistence baseline and a per-city
-breakdown -- NASA POWER's -999 missing-data sentinel (and any non-finite
-reading) is dropped, not imputed, since a guessed value here would corrupt
-both the feature and the baseline.
+test_meta.npz (city/date/baseline_pred/target per test row, same order as
+X_test) so validate_template.py can report the persistence baseline and a
+per-city breakdown -- NASA POWER's -999 missing-data sentinel (and any
+non-finite reading) is dropped, not imputed, since a guessed value here
+would corrupt both the feature and the baseline.
 """
+import argparse
 import csv
 import datetime
+import math
 import os
 
 import numpy as np
@@ -30,13 +45,12 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(HERE), "data")
 
+# (name, csv path, [is_seattle, is_chicago] one-hot -- phoenix is the reference city, [0, 0])
 CITIES = [
-    ("phoenix", os.path.join(DATA_DIR, "phoenix_az.csv"), 0.0),
-    ("seattle", os.path.join(DATA_DIR, "seattle_wa.csv"), 1.0),
+    ("phoenix", os.path.join(DATA_DIR, "phoenix_az.csv"), [0.0, 0.0]),
+    ("seattle", os.path.join(DATA_DIR, "seattle_wa.csv"), [1.0, 0.0]),
+    ("chicago", os.path.join(DATA_DIR, "chicago_il.csv"), [0.0, 1.0]),
 ]
-TRAIN_YEARS = {2021, 2022}
-VAL_YEARS = {2023}
-TEST_YEARS = {2024}
 MISSING_SENTINEL = -900.0  # NASA POWER uses -999; threshold catches formatting variants
 
 
@@ -59,7 +73,7 @@ def _read_city_csv(path):
     return rows
 
 
-def _build_examples(rows, city_flag):
+def _build_examples(rows, city_onehot):
     """One example per (today, tomorrow) pair. Drops the last row of the
     series (no tomorrow), any pair touching a missing/non-finite reading,
     and any pair that isn't actually consecutive days (a gap or duplicate
@@ -77,8 +91,13 @@ def _build_examples(rows, city_flag):
         values = (today["sw"], today["t2m"], today["rh2m"], today["cloud"], tomorrow["sw"])
         if any(not np.isfinite(v) or v <= MISSING_SENTINEL for v in values):
             continue
+        doy = today_date.timetuple().tm_yday
+        angle = 2 * math.pi * doy / 365.25
         examples.append({
-            "features": [today["sw"], today["t2m"], today["rh2m"], today["cloud"], city_flag],
+            "features": [
+                today["sw"], today["t2m"], today["rh2m"], today["cloud"],
+                *city_onehot, math.sin(angle), math.cos(angle),
+            ],
             "target": tomorrow["sw"],
             "baseline_pred": today["sw"],  # persistence: "tomorrow = today"
             "date": today["date"],
@@ -93,16 +112,29 @@ def _split(examples, years):
     return [e for e in examples if e["target_year"] in years]
 
 
+def _parse_years(s):
+    return {int(y) for y in s.split(",")}
+
+
 def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--train-years", default="2021,2022")
+    ap.add_argument("--val-years", default="2023")
+    ap.add_argument("--test-years", default="2024")
+    args = ap.parse_args()
+    train_years = _parse_years(args.train_years)
+    val_years = _parse_years(args.val_years)
+    test_years = _parse_years(args.test_years)
+
     all_examples = {"train": [], "val": [], "test": []}
     test_meta = {"city": [], "date": [], "baseline_pred": [], "target": []}
 
-    for city_name, path, city_flag in CITIES:
+    for city_name, path, city_onehot in CITIES:
         rows = _read_city_csv(path)
-        examples = _build_examples(rows, city_flag)
+        examples = _build_examples(rows, city_onehot)
         print(f"[prepare_solar_data] {city_name}: {len(rows)} daily rows -> {len(examples)} usable examples")
 
-        for split_name, years in (("train", TRAIN_YEARS), ("val", VAL_YEARS), ("test", TEST_YEARS)):
+        for split_name, years in (("train", train_years), ("val", val_years), ("test", test_years)):
             split_examples = _split(examples, years)
             all_examples[split_name].extend(split_examples)
             if split_name == "test":
@@ -116,8 +148,9 @@ def main():
         if not exs:
             raise SystemExit(
                 f"[prepare_solar_data] '{split_name}' split is empty -- check "
-                "TRAIN_YEARS/VAL_YEARS/TEST_YEARS against the date range actually "
-                "downloaded, rather than writing a malformed (0,) array downstream."
+                "--train-years/--val-years/--test-years against the date range "
+                "actually downloaded, rather than writing a malformed (0,) array "
+                "downstream."
             )
         X = np.array([e["features"] for e in exs], dtype=np.float64)
         y = np.array([e["target"] for e in exs], dtype=np.float64)

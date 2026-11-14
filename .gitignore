@@ -9,4 +9,6 @@ pipeline/predictions.npz
 pipeline/metrics_summary.json
 pipeline/train_metrics.json
 pipeline/validation_results.json
+pipeline/validation_results_fold_*.json
+walkforward_summary.json
 interface/result.html
