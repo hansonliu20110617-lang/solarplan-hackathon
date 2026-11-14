@@ -27,14 +27,27 @@ actual atmosphere. The climatological (many-year average, training-years
 only) version has no such problem: it's a fixed, pre-computable number for
 any given calendar day, derivable before any forecast is made.
 
-Feature row (today) -> target (tomorrow's):
+Feature row (today) -> target (tomorrow's), default --location-feature=latlon:
   [csi_today, temp_today, humidity_today, cloud_today,
    latitude, longitude, doy_sin, doy_cos] -> csi_tomorrow
 
-Location is continuous latitude/longitude, not a one-hot city flag -- a
-one-hot would let the model memorize three fixed slots, useless (and
-misleading) for a city it's never seen. day-of-year is sin/cos encoded so
-Dec 31 and Jan 1 are adjacent in feature space, not 364 apart.
+Location is continuous latitude/longitude by default, not a one-hot city
+flag -- a one-hot would let the model memorize fixed slots, useless (and
+misleading) for a city it's never seen. We also tried --location-feature
+climate_profile (each city's own 24-value monthly clear-sky-index and
+humidity profile, computed from training years only, instead of lat/lon),
+specifically hoping it would fix the generalization gap documented in
+run_leave_one_city_out.py / run_learning_curve.py -- it made Miami's gap
+dramatically WORSE instead (skill -4.08/-0.42/-0.70 across seeds vs.
+lat/lon's -0.086). Kept in this file (not deleted) so that negative result
+stays reproducible; the likely mechanism is that 24 raw per-city constants
+are a higher-dimensional "fingerprint" than lat/lon's 2 numbers, giving the
+model more room to memorize the training cities instead of learning
+something transferable -- more expressive location features don't
+automatically fix small-sample spatial generalization; they can make the
+underlying memorization risk worse. day-of-year is sin/cos encoded so
+Dec 31 and Jan 1 are adjacent
+in feature space, not 364 apart.
 
 Train/val/test years are CLI-configurable (--train-years/--val-years/
 --test-years, comma-separated) so run_walkforward.py can run this multiple
@@ -79,11 +92,13 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(HERE), "data")
 
-# (name, csv path, latitude, longitude) -- ten cities chosen for climate
-# diversity (desert, coastal, continental, humid subtropical, tropical,
-# high-altitude, Mediterranean), not just the original three, so a
-# leave-one-city-out test has enough distinct training locations to learn a
-# real function of latitude/longitude rather than memorizing a handful of points.
+# (name, csv path, latitude, longitude) -- lat/lon kept for reference/
+# documentation only, not fed to the model (see module docstring). Cities
+# chosen for climate diversity (desert, coastal, continental, humid
+# subtropical, tropical, high-altitude, Mediterranean) so a
+# leave-one-city-out test has enough distinct training locations to learn
+# something that generalizes, plus Tampa and Honolulu added specifically to
+# test the seasonal-mechanism hypothesis behind Miami's generalization gap.
 CITIES = [
     ("phoenix", os.path.join(DATA_DIR, "phoenix_az.csv"), 33.4484, -112.0740),
     ("seattle", os.path.join(DATA_DIR, "seattle_wa.csv"), 47.6062, -122.3321),
@@ -95,6 +110,15 @@ CITIES = [
     ("houston", os.path.join(DATA_DIR, "houston_tx.csv"), 29.7601, -95.3701),
     ("losangeles", os.path.join(DATA_DIR, "losangeles_ca.csv"), 34.0522, -118.2437),
     ("boston", os.path.join(DATA_DIR, "boston_ma.csv"), 42.3601, -71.0589),
+    # Checked empirically (not assumed): Honolulu's monthly clear-sky-index
+    # curve actually matches the STANDARD pattern (clearest in summer) like
+    # every other training city, not Miami's -- so it's a bad test of the
+    # seasonal-mechanism hypothesis, kept here only for the record.
+    ("honolulu", os.path.join(DATA_DIR, "honolulu_hi.csv"), 21.3099, -157.8583),
+    # Tampa shares Miami's actual shape (spring peak, summer dip from
+    # Florida-peninsula sea-breeze convection), confirmed by comparing their
+    # monthly CSI curves directly -- the real test city for that hypothesis.
+    ("tampa", os.path.join(DATA_DIR, "tampa_fl.csv"), 27.9506, -82.4572),
 ]
 MISSING_SENTINEL = -900.0  # NASA POWER uses -999; threshold catches formatting variants
 # CSI can run slightly above 1.0 (cloud-enhancement effects can briefly exceed the
@@ -156,7 +180,50 @@ def _climatological_clrsky(rows, train_years):
     return {md: float(np.mean(vals)) for md, vals in by_date.items()}, overall_fallback
 
 
-def _build_examples(rows, lat, lon, clim_clrsky, clim_fallback):
+def _climatological_monthly_profile(rows, train_years, clim_clrsky, clim_fallback):
+    """Each location's own 12-value average clear-sky-index-by-month and
+    12-value average-humidity-by-month, computed ONLY from train_years --
+    the climate descriptor that replaces lat/lon (see module docstring).
+    CSI here reuses the same per-(month,day) climatological ceiling as
+    _build_examples, so this profile is on the same scale as the daily CSI
+    feature/target everywhere else. Returns a flat 24-value list, months
+    1-12 CSI then 1-12 humidity, with any month missing training data
+    (shouldn't happen for a multi-year training window) filled from the
+    overall training-period average for that variable."""
+    csi_by_month = {m: [] for m in range(1, 13)}
+    rh_by_month = {m: [] for m in range(1, 13)}
+    for row in rows:
+        if row["year"] not in train_years:
+            continue
+        d = datetime.date.fromisoformat(row["date"])
+        # CSI and humidity are accumulated independently -- a day with a
+        # missing solar reading but a valid humidity reading (or vice versa)
+        # should still contribute to whichever profile it can. Peer review
+        # caught an earlier version that skipped humidity too whenever sw
+        # was missing, needlessly discarding valid data (didn't affect this
+        # project's actual numbers since none of our cities had missing
+        # readings, but wrong in general).
+        if np.isfinite(row["sw"]) and row["sw"] > MISSING_SENTINEL:
+            ceiling = clim_clrsky.get((d.month, d.day), clim_fallback)
+            csi_by_month[d.month].append(np.clip(row["sw"] / ceiling, *CSI_CLIP))
+        if np.isfinite(row["rh2m"]) and row["rh2m"] > MISSING_SENTINEL:
+            rh_by_month[d.month].append(row["rh2m"])
+
+    all_csi = [v for vals in csi_by_month.values() for v in vals]
+    all_rh = [v for vals in rh_by_month.values() for v in vals]
+    if not all_csi or not all_rh:
+        raise SystemExit(
+            "[prepare_solar_data] no usable readings in the training years -- "
+            "can't build a monthly climate-descriptor profile."
+        )
+    csi_fallback = float(np.mean(all_csi))
+    rh_fallback = float(np.mean(all_rh))
+    csi_profile = [float(np.mean(csi_by_month[m])) if csi_by_month[m] else csi_fallback for m in range(1, 13)]
+    rh_profile = [float(np.mean(rh_by_month[m])) if rh_by_month[m] else rh_fallback for m in range(1, 13)]
+    return csi_profile + rh_profile
+
+
+def _build_examples(rows, location_feature, clim_clrsky, clim_fallback):
     """One example per (today, tomorrow) pair. Drops the last row of the
     series (no tomorrow), any pair touching a missing/non-finite reading,
     and any pair that isn't actually consecutive days. clim_clrsky is the
@@ -191,7 +258,7 @@ def _build_examples(rows, lat, lon, clim_clrsky, clim_fallback):
         examples.append({
             "features": [
                 float(today_csi), today["t2m"], today["rh2m"], today["cloud"],
-                lat, lon, math.sin(angle), math.cos(angle),
+                *location_feature, math.sin(angle), math.cos(angle),
             ],
             "target": float(tomorrow_csi),
             "baseline_pred": float(today_csi),  # persistence in CSI-space: "tomorrow's clearness = today's"
@@ -257,6 +324,17 @@ def main():
                           "validated extensively) -- run_leave_one_city_out.py passes "
                           "all ten for the many-location generalization experiment, "
                           "without changing what the main pipeline/walk-forward use.")
+    ap.add_argument("--location-feature", default="latlon", choices=["latlon", "climate_profile"],
+                     help="latlon (default, shipped): continuous latitude/longitude. "
+                          "climate_profile: each city's own 24-value monthly CSI+humidity "
+                          "profile instead -- tried specifically to fix Miami's "
+                          "generalization gap, found empirically to make it dramatically "
+                          "worse (skill -4.08/-0.42/-0.70 across seeds vs. latlon's -0.086) "
+                          "-- kept here, not deleted, so that negative result stays "
+                          "reproducible. Likely cause: 24 raw per-city constants are a "
+                          "higher-dimensional fingerprint than lat/lon's 2 numbers, giving "
+                          "the model more room to memorize training cities instead of "
+                          "learning something transferable.")
     args = ap.parse_args()
     train_years = _parse_years(args.train_years)
     val_years = _parse_years(args.val_years)
@@ -283,7 +361,11 @@ def main():
     for city_name, path, lat, lon in active_cities:
         rows = _read_city_csv(path)
         clim_clrsky, clim_fallback = _climatological_clrsky(rows, train_years)
-        examples = _build_examples(rows, lat, lon, clim_clrsky, clim_fallback)
+        if args.location_feature == "climate_profile":
+            location_feature = _climatological_monthly_profile(rows, train_years, clim_clrsky, clim_fallback)
+        else:
+            location_feature = [lat, lon]
+        examples = _build_examples(rows, location_feature, clim_clrsky, clim_fallback)
         print(f"[prepare_solar_data] {city_name}: {len(rows)} daily rows -> {len(examples)} usable examples")
 
         city_splits = {

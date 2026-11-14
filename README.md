@@ -252,22 +252,44 @@ Miami has an inverted seasonal cycle (tropical, Köppen Am: clear skies in
 training city's Northern-temperate pattern. The day-of-year feature learns
 "summer = clearer" from the other 9 cities, which is backwards for Miami,
 and the gap concentrates exactly in Miami's wet season as that mechanism
-predicts. More *generic* diversity helped a lot; a city sharing Miami's
-specific seasonal mechanism likely would have helped more, and no city in
-the training set has one.
+predicts (confirmed directly: checking each candidate city's own monthly
+clear-sky curve, Houston — already in training — actually follows the
+*standard* summer-peak pattern, not Miami's; Honolulu does too, despite
+being tropical. Tampa's peninsula-driven spring-peak/summer-dip shape is
+the real match).
+
+**Two follow-up tests, both run, both honestly reported — one helped a
+little, one made things much worse.**
+
+*Swapping in a seasonally-matched city.* Replacing Boston with Tampa (same
+training-set size, same holdout) roughly halved the mean skill deficit
+(−0.086 → −0.039 across 3 seeds) but was noisy (−0.071, −0.072, +0.027) and
+didn't move decision accuracy (~81% either way) — suggestive, not a clean
+fix with just one matched city.
+
+*Replacing lat/lon with explicit climate-descriptor features* (each city's
+own 24-value monthly clear-sky-index + humidity profile, computed from
+training years only — the literature-suggested fix for exactly this
+problem) made Miami's gap **dramatically worse**, not better: skill
+−4.08/−0.42/−0.70 across seeds, versus lat/lon's −0.086. The likely reason:
+24 raw per-city constants are a *higher-dimensional fingerprint* than
+lat/lon's 2 numbers — more room to memorize the 9 training cities, not less.
+This is kept in `prepare_solar_data.py` (`--location-feature climate_profile`)
+rather than deleted, so the negative result stays reproducible. Lat/lon
+remains what's actually shipped, because it's what performed best across
+every experiment in this project, not by default.
 
 ## What we'd do next
 
-Test the specific seasonal-inversion mechanism directly by adding another
-tropical/inverted-season location (Honolulu, San Juan) and checking whether
-*it* closes Miami's gap specifically — that would turn "plausible
-explanation" into "demonstrated fix." Also: replace static latitude/
-longitude with each location's own monthly climate descriptors (average
-clear-sky index, average humidity by month), which the literature suggests
-is what actually makes cross-site transfer work, rather than raw
-coordinates. And get genuine archived day-ahead forecasts (with real,
-verified lead time, unlike Open-Meteo's archive) to attack the storm-front
-failure case, which nothing in this project currently can see coming.
+Get genuine archived day-ahead forecasts (with real, verified lead time,
+unlike Open-Meteo's archive) to attack the storm-front failure case, which
+nothing in this project currently can see coming. On the generalization
+side: a systematic single-city-swap search (not just the one Tampa test)
+to see which other training-city changes help or hurt Miami, and a more
+statistically rigorous test than the sign test for the walk-forward
+comparison (a Diebold-Mariano test with autocorrelation-robust variance,
+which doesn't assume the ten years are fully independent the way a sign
+test does).
 
 ## Sources
 
