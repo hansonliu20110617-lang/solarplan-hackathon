@@ -244,14 +244,28 @@ def _climatological_monthly_profile(rows, train_years, clim_clrsky, clim_fallbac
     return csi_profile + rh_profile
 
 
-def _build_examples(rows, location_feature, clim_clrsky, clim_fallback):
+def _build_examples(rows, location_feature, clim_clrsky, clim_fallback, monthly_csi=None):
     """One example per (today, tomorrow) pair. Drops the last row of the
     series (no tomorrow), any pair touching a missing/non-finite reading,
     and any pair that isn't actually consecutive days. clim_clrsky is the
     per-calendar-day CLIMATOLOGICAL clear-sky ceiling (see
     _climatological_clrsky) -- using it instead of that day's own raw
     CLRSKY value is what makes the kWh conversion in validate_template.py
-    leak-free."""
+    leak-free.
+
+    monthly_csi (12 values, or None): if given, both the "today" feature
+    and the target become ANOMALIES -- CSI minus that city's own monthly
+    climatological CSI -- instead of absolute CSI (see --target-mode in
+    main()). Rationale (from review, confirmed by checking the data): the
+    climate-descriptor location feature made an unseen city's forecasts
+    much worse, not better, because 9 training cities can't span 24
+    feature dimensions -- almost any new city falls outside the training
+    points' span even when no single coordinate looks like an outlier.
+    Reframing the target as a deviation from each city's OWN climatology
+    (a direct lookup, not something the network has to learn or
+    extrapolate) sidesteps that: the network only ever has to learn
+    weather-driven departures from normal, which should behave similarly
+    in any climate, rather than the climate's absolute level itself."""
     examples = []
     skipped_gap = 0
     for i in range(len(rows) - 1):
@@ -271,6 +285,18 @@ def _build_examples(rows, location_feature, clim_clrsky, clim_fallback):
         today_csi = np.clip(today["sw"] / today_ceiling, *CSI_CLIP)
         tomorrow_csi = np.clip(tomorrow["sw"] / tomorrow_ceiling, *CSI_CLIP)
 
+        if monthly_csi is not None:
+            today_offset = monthly_csi[today_date.month - 1]
+            tomorrow_offset = monthly_csi[tomorrow_date.month - 1]
+            today_value = today_csi - today_offset  # anomaly: today's CSI feature
+            target_value = tomorrow_csi - tomorrow_offset  # anomaly: the target
+            baseline_value = today_value  # persistence in anomaly-space
+        else:
+            today_offset = tomorrow_offset = 0.0  # no-op reconstruction offset in absolute mode
+            today_value = today_csi
+            target_value = tomorrow_csi
+            baseline_value = today_csi
+
         # The sin/cos seasonal feature can stay day-of-year-based: a leap
         # year shifts its phase by at most 1/365 of a full cycle, a
         # negligible wobble for a smooth cyclical feature -- unlike the
@@ -278,14 +304,17 @@ def _build_examples(rows, location_feature, clim_clrsky, clim_fallback):
         angle = 2 * math.pi * today_date.timetuple().tm_yday / 365.25
         examples.append({
             "features": [
-                float(today_csi), today["t2m"], today["rh2m"], today["cloud"],
+                float(today_value), today["t2m"], today["rh2m"], today["cloud"],
                 *location_feature, math.sin(angle), math.cos(angle),
             ],
-            "target": float(tomorrow_csi),
-            "baseline_pred": float(today_csi),  # persistence in CSI-space: "tomorrow's clearness = today's"
+            "target": float(target_value),
+            "baseline_pred": float(baseline_value),
             "date": today["date"],
             "target_year": tomorrow_date.year,  # split membership keys on this, not today's year
             "tomorrow_clrsky": tomorrow_ceiling,  # climatological -- pre-computable, not a forecast
+            # added back to a predicted/true anomaly to reconstruct absolute
+            # CSI before converting to kWh -- 0.0 in absolute mode (no-op)
+            "tomorrow_csi_offset": float(tomorrow_offset),
             "tomorrow_actual_kwh": tomorrow["sw"],
         })
     if skipped_gap:
@@ -356,6 +385,15 @@ def main():
                           "higher-dimensional fingerprint than lat/lon's 2 numbers, giving "
                           "the model more room to memorize training cities instead of "
                           "learning something transferable.")
+    ap.add_argument("--target-mode", default="absolute", choices=["absolute", "anomaly"],
+                     help="absolute (default, shipped): the 'today' feature and target are "
+                          "raw clear-sky index. anomaly: both become CSI minus that city's "
+                          "own monthly climatological CSI (computed from training years "
+                          "only) -- tried specifically because the climate_profile location "
+                          "feature failed by making the network extrapolate a learned "
+                          "function past only 9 training points; this instead hands the "
+                          "seasonal level to the network as a direct, non-learned lookup, "
+                          "so it only ever has to learn weather-driven departures from it.")
     args = ap.parse_args()
     train_years = _parse_years(args.train_years)
     val_years = _parse_years(args.val_years)
@@ -377,16 +415,20 @@ def main():
 
     all_examples = {"train": [], "val": [], "test": []}
     test_meta = {"city": [], "date": [], "baseline_pred": [], "target": [], "decision_threshold": [],
-                 "tomorrow_clrsky": [], "tomorrow_actual_kwh": []}
+                 "tomorrow_clrsky": [], "tomorrow_actual_kwh": [], "tomorrow_csi_offset": []}
 
     for city_name, path, lat, lon in active_cities:
         rows = _read_city_csv(path)
         clim_clrsky, clim_fallback = _climatological_clrsky(rows, train_years)
-        if args.location_feature == "climate_profile":
-            location_feature = _climatological_monthly_profile(rows, train_years, clim_clrsky, clim_fallback)
-        else:
-            location_feature = [lat, lon]
-        examples = _build_examples(rows, location_feature, clim_clrsky, clim_fallback)
+        # Computed from THIS city's own training-year data regardless of
+        # --holdout-city status -- same reasoning as decision_threshold
+        # above: a direct lookup of a location's own known history, not
+        # something the forecasting model needs to have trained on.
+        need_profile = args.location_feature == "climate_profile" or args.target_mode == "anomaly"
+        profile = _climatological_monthly_profile(rows, train_years, clim_clrsky, clim_fallback) if need_profile else None
+        location_feature = profile if args.location_feature == "climate_profile" else [lat, lon]
+        monthly_csi = profile[:12] if args.target_mode == "anomaly" else None
+        examples = _build_examples(rows, location_feature, clim_clrsky, clim_fallback, monthly_csi=monthly_csi)
         print(f"[prepare_solar_data] {city_name}: {len(rows)} daily rows -> {len(examples)} usable examples")
 
         city_splits = {
@@ -428,6 +470,7 @@ def main():
                 test_meta["decision_threshold"].extend([decision_threshold] * len(split_examples))
                 test_meta["tomorrow_clrsky"].extend([e["tomorrow_clrsky"] for e in split_examples])
                 test_meta["tomorrow_actual_kwh"].extend([e["tomorrow_actual_kwh"] for e in split_examples])
+                test_meta["tomorrow_csi_offset"].extend([e["tomorrow_csi_offset"] for e in split_examples])
 
     def to_arrays(split_name):
         exs = all_examples[split_name]
@@ -466,6 +509,9 @@ def main():
         # converting a CSI prediction back to kWh with this introduces no leakage.
         tomorrow_clrsky=np.array(test_meta["tomorrow_clrsky"], dtype=np.float64),
         tomorrow_actual_kwh=np.array(test_meta["tomorrow_actual_kwh"], dtype=np.float64),
+        # added back to a predicted/true anomaly to reconstruct absolute CSI
+        # before converting to kWh -- all zeros in --target-mode absolute (no-op).
+        tomorrow_csi_offset=np.array(test_meta["tomorrow_csi_offset"], dtype=np.float64),
     )
 
     print(f"[prepare_solar_data] train={X_train.shape} val={X_val.shape} test={X_test.shape}"

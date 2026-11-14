@@ -39,6 +39,7 @@ def _load_test_meta():
         "decision_threshold": np.asarray(data["decision_threshold"], dtype=float),
         "tomorrow_clrsky": np.asarray(data["tomorrow_clrsky"], dtype=float),
         "tomorrow_actual_kwh": np.asarray(data["tomorrow_actual_kwh"], dtype=float),
+        "tomorrow_csi_offset": np.asarray(data["tomorrow_csi_offset"], dtype=float),
     }
 
 
@@ -129,7 +130,8 @@ def validate(predictions, test_meta):
     y_true_csi = predictions["y_true"][test_mask].reshape(-1)
     y_pred_csi = predictions["y_pred"][test_mask].reshape(-1)
     n = len(y_true_csi)
-    for field in ("baseline_pred", "target", "decision_threshold", "tomorrow_clrsky", "tomorrow_actual_kwh"):
+    for field in ("baseline_pred", "target", "decision_threshold", "tomorrow_clrsky",
+                  "tomorrow_actual_kwh", "tomorrow_csi_offset"):
         if test_meta[field].ndim != 1 or test_meta[field].shape[0] != len(test_meta["city"]):
             raise SystemExit(
                 f"[validate] test_meta['{field}'] has shape {test_meta[field].shape}, "
@@ -153,13 +155,19 @@ def validate(predictions, test_meta):
             "Re-run prepare_solar_data.py then the rest of the pipeline."
         )
 
-    # Convert clear-sky-index predictions back to kWh using the known-in-advance
-    # clear-sky ceiling for that row's date/location -- this is arithmetic on a
-    # deterministic/astronomical quantity, not a second forecast, so it adds no leakage.
+    # Convert predictions back to kWh. tomorrow_csi_offset adds back each
+    # row's climatological CSI level before the clear-sky-ceiling
+    # multiplication -- all zeros in --target-mode absolute (a no-op), but
+    # in --target-mode anomaly, y_pred_csi/y_true_csi/baseline_pred are
+    # actually anomalies (CSI minus climatology) until this is added back.
+    # Neither the offset nor the clear-sky ceiling is a forecast of
+    # anything -- both are pre-computable from training-years-only history
+    # -- so this reconstruction adds no leakage.
     clrsky = test_meta["tomorrow_clrsky"]
+    offset = test_meta["tomorrow_csi_offset"]
     true_kwh = test_meta["tomorrow_actual_kwh"]
-    model_pred_kwh = y_pred_csi * clrsky
-    baseline_pred_kwh = test_meta["baseline_pred"] * clrsky
+    model_pred_kwh = (y_pred_csi + offset) * clrsky
+    baseline_pred_kwh = (test_meta["baseline_pred"] + offset) * clrsky
 
     csi_model_errors = np.abs(y_true_csi - y_pred_csi)
     csi_baseline_errors = np.abs(y_true_csi - test_meta["baseline_pred"])

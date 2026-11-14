@@ -102,10 +102,16 @@ def _post(url, headers, payload, timeout=60):
 # actual answer. 1200 cut it too close for a real code-review prompt; 3000
 # still wasn't enough for Gemini on a complex multi-function file review
 # (2878 thinking + 118 output = 2996, truncated mid-sentence) -- bumped to
-# 5000. See the truncation checks in ask() below for what happens if it
+# 5000, then capped Gemini's thinkingConfig.thinkingBudget at a fixed 3000
+# so thinking can't eat the whole thing. On a larger file than that fix was
+# tested against, thinking still used 4802 tokens (over the cap) and
+# truncated again -- thinkingBudget appears to be a soft target Gemini can
+# exceed, not a hard limit, at least for this model/version. Bumped to 8000
+# total as a wider safety margin rather than chasing an exact number
+# further. See the truncation checks in ask() below for what happens if it
 # still happens (fail loudly, don't silently return a cut-off answer).
 FAST_MAX_TOKENS = 400
-QUALITY_MAX_TOKENS = 5000
+QUALITY_MAX_TOKENS = 8000
 
 
 def _print_usage(provider, model, usage_line):
