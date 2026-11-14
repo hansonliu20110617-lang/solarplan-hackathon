@@ -103,9 +103,18 @@ def _decision_simulation(true_kwh, model_pred_kwh, baseline_pred_kwh, threshold)
             "n": int(len(oracle)),
         }
 
+    # Reference point raised in review: 85-94% decision accuracy means
+    # nothing on its own if simply always guessing the majority class would
+    # already score that high in a lopsided climate (e.g. Phoenix is "enough
+    # sun" on the vast majority of days). This is the number any reported
+    # accuracy actually needs to beat to mean anything.
+    oracle_rate = float(oracle.mean())
+    majority_class_accuracy = max(oracle_rate, 1.0 - oracle_rate)
+
     return {
         "threshold": threshold_for_reporting,
-        "oracle_run_off_solar_rate": float(oracle.mean()),
+        "oracle_run_off_solar_rate": oracle_rate,
+        "majority_class_accuracy": majority_class_accuracy,
         "model": _rates(model_decision),
         "baseline": _rates(baseline_decision),
     }
@@ -220,13 +229,15 @@ if __name__ == "__main__":
 
     output = {
         "source": (
-            "Daily NASA POWER readings for Phoenix AZ, Seattle WA, and Chicago IL "
-            "-- held out by calendar year, never touched during training or "
-            "early stopping. The model predicts the clear-sky index; errors below "
-            "are reported in kWh/m^2/day after converting back with the known "
-            "clear-sky ceiling. Baseline is persistence in clear-sky-index space "
-            "(tomorrow's clearness = today's), computed directly from the raw "
-            "data, not from the model."
+            "Daily NASA POWER readings, held out by calendar year (and, in "
+            "leave-one-city-out runs, by location) -- never touched during "
+            "training or early stopping. The model predicts the clear-sky index; "
+            "errors below are reported in kWh/m^2/day after converting back with "
+            "a training-years-only climatological clear-sky ceiling. The baseline "
+            "is 'smart persistence' in clear-sky-index space (tomorrow's clearness "
+            "= today's, scaled by each day's own climatological ceiling) -- a "
+            "standard, non-trivial baseline in the solar-forecasting literature, "
+            "not naive raw-kWh persistence."
         ),
         **result,
         "provenance": {
@@ -254,7 +265,8 @@ if __name__ == "__main__":
     d = output["decision"]
     print(
         f"  decision (pooled): model_correct={d['model']['correct_rate']:.1%}  "
-        f"baseline_correct={d['baseline']['correct_rate']:.1%}"
+        f"baseline_correct={d['baseline']['correct_rate']:.1%}  "
+        f"majority_class={d['majority_class_accuracy']:.1%}"
     )
     for city, stats in output["per_city"].items():
         cd = stats["decision"]
@@ -262,5 +274,6 @@ if __name__ == "__main__":
             f"  {city}: n={stats['n']}  model_mean={stats['model']['mean_error']:.4f}  "
             f"baseline_mean={stats['baseline']['mean_error']:.4f}  skill={stats['skill_score']:+.4f}  "
             f"model_decision_correct={cd['model']['correct_rate']:.1%}  "
-            f"baseline_decision_correct={cd['baseline']['correct_rate']:.1%}"
+            f"baseline_decision_correct={cd['baseline']['correct_rate']:.1%}  "
+            f"majority_class={cd['majority_class_accuracy']:.1%}"
         )

@@ -8,6 +8,7 @@ falls back to an inline toy regression dataset so this file always runs
 standalone. Swap in a real model/dataset later; keep the loop structure
 (early stopping, saved artifacts) as-is.
 """
+import argparse
 import json
 import os
 
@@ -196,6 +197,16 @@ def error_metrics(y_true, y_pred):
 
 
 def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--seed", type=int, default=0,
+                     help="MLP init seed. Every result in this project before "
+                          "run_learning_curve.py used the fixed default (0) -- "
+                          "that means those single-run results have no error bars "
+                          "of their own; run_learning_curve.py varies this "
+                          "explicitly to find out how much a result moves on seed "
+                          "alone versus real signal.")
+    args = ap.parse_args()
+
     data = load_data()
     X_train, y_train = data["X_train"], data["y_train"]
     X_val, y_val = data["X_val"], data["y_val"]
@@ -203,7 +214,7 @@ def main():
 
     X_train, X_val, X_test = preprocess(X_train, X_val, X_test)
 
-    model = MLP(n_in=X_train.shape[1], hidden=(64, 32), seed=0)
+    model = MLP(n_in=X_train.shape[1], hidden=(64, 32), seed=args.seed)
     train_loss, val_loss, best_epoch, best_val = train(
         model, X_train, y_train, X_val, y_val, epochs=2000, lr=1e-3, patience=30
     )

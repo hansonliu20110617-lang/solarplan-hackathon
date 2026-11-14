@@ -10,6 +10,11 @@ pipeline/metrics_summary.json
 pipeline/train_metrics.json
 pipeline/validation_results.json
 pipeline/validation_results_fold_*.json
+pipeline/validation_results_loco_*.json
+pipeline/validation_results_loco10_*.json
+pipeline/validation_results_10city_in_distribution.json
 pipeline/impact_estimate.json
 walkforward_summary.json
+leave_one_city_out_summary.json
+learning_curve_results.json
 interface/result.html
