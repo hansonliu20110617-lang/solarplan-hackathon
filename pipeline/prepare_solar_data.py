@@ -119,6 +119,11 @@ CITIES = [
     # Florida-peninsula sea-breeze convection), confirmed by comparing their
     # monthly CSI curves directly -- the real test city for that hypothesis.
     ("tampa", os.path.join(DATA_DIR, "tampa_fl.csv"), 27.9506, -82.4572),
+    # Portland is Seattle's analogue to Tampa/Miami: confirmed by comparing
+    # monthly CSI curves directly, it's the same Pacific-Northwest maritime
+    # pattern (low mean CSI, large seasonal amplitude) that makes Seattle a
+    # generalization outlier -- a test city for the Seattle swap experiment.
+    ("portland", os.path.join(DATA_DIR, "portland_or.csv"), 45.5152, -122.6784),
 ]
 MISSING_SENTINEL = -900.0  # NASA POWER uses -999; threshold catches formatting variants
 # CSI can run slightly above 1.0 (cloud-enhancement effects can briefly exceed the

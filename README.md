@@ -355,14 +355,34 @@ underlying story as Miami, different mechanism: the gap tracks how well the
 held-out city's climate is represented among the training cities, not just
 how many training cities there are.
 
+**That hypothesis predicts its own fix, and the fix worked cleanly.** The
+same swap test run for Miami/Tampa, run for Seattle: fetched Portland, OR
+(confirmed via its own monthly CSI curve — amplitude 0.312, mean 0.657,
+peak in July — to be the same Pacific-Northwest maritime pattern as
+Seattle, not assumed), swapped it in for Boston in Seattle's 9-city
+training set, same holdout, 3 seeds:
+
+| | seed 0 | seed 1 | seed 2 | Mean |
+|---|---|---|---|---|
+| Boston (original) | −0.280 | +0.073 | −1.519 | −0.575 |
+| Portland (swap) | +0.111 | +0.144 | +0.162 | **+0.139** |
+
+This is a full flip to positive skill, and — unlike the Tampa swap, which
+was noisy and inconsistent in sign across seeds — all three Portland seeds
+land positive and close together. The cleanest, most decisive result in
+this project's whole generalization investigation: once a training set
+actually contains a city with a representative climate, Seattle stops
+being a generalization failure at all.
+
 ## What we'd do next
 
 Get genuine archived day-ahead forecasts (with real, verified lead time,
 unlike Open-Meteo's archive) to attack the storm-front failure case, which
 nothing in this project currently can see coming. On the generalization
-side: a systematic single-city-swap search (not just the one Tampa test)
-to see which other training-city changes help or hurt Miami and Seattle.
-We also added a paired t-test alongside the sign test for the
+side: Miami's gap is still only partially explained by one swap test
+(Tampa helped some, noisily) — a systematic search over more candidate
+swaps, the way the clean Portland result closed Seattle's gap, could do
+the same for Miami. We also added a paired t-test alongside the sign test for the
 walk-forward comparison (it's what caught Phoenix's real-but-easy-to-miss
 effect — see Results); a further step would be a true per-day
 Diebold-Mariano test with autocorrelation-robust (HAC) variance on the
