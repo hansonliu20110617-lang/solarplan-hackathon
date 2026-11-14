@@ -267,17 +267,67 @@ training-set size, same holdout) roughly halved the mean skill deficit
 didn't move decision accuracy (~81% either way) — suggestive, not a clean
 fix with just one matched city.
 
+*Reframing the target as an anomaly* (predicting the deviation from Miami's
+own monthly climatological CSI, instead of the absolute CSI level — the
+top-ranked fix from the same review, on the reasoning that the seasonal
+shape should come from the data, not be learned from 9 other cities' shapes)
+made things modestly **worse**, not better, in a single-seed test:
+skill −0.057 → −0.209, decision accuracy 79.8% → 77.6% (same 9 training
+cities, same seed, same holdout). One seed isn't enough to call this
+conclusively worse rather than noise, but it's the opposite direction we
+expected, and it's reported as-is rather than re-run until it looks better.
+A plausible reason: anomaly framing throws away *today's* absolute CSI level
+as a feature, and for a city whose day-to-day variance is itself unusually
+large (Miami's wet season), that level carries real information the
+climatology-relative framing doesn't recover elsewhere in the feature set.
+This is implemented and reproducible (`--target-mode anomaly`), kept for
+exactly that reason, but not what's shipped.
+
 *Replacing lat/lon with explicit climate-descriptor features* (each city's
 own 24-value monthly clear-sky-index + humidity profile, computed from
 training years only — the literature-suggested fix for exactly this
 problem) made Miami's gap **dramatically worse**, not better: skill
-−4.08/−0.42/−0.70 across seeds, versus lat/lon's −0.086. The likely reason:
-24 raw per-city constants are a *higher-dimensional fingerprint* than
-lat/lon's 2 numbers — more room to memorize the 9 training cities, not less.
-This is kept in `prepare_solar_data.py` (`--location-feature climate_profile`)
-rather than deleted, so the negative result stays reproducible. Lat/lon
-remains what's actually shipped, because it's what performed best across
-every experiment in this project, not by default.
+−4.08/−0.42/−0.70 across seeds, versus lat/lon's −0.086. A second review
+(Grok) offered a sharper explanation than our first guess ("memorization"):
+9 training cities' profiles span only 9 points in a 24-dimensional space, and
+a ReLU network extrapolates roughly linearly outside the span those 9 points
+jointly cover — almost any new city lands outside that span even when none
+of its individual coordinates look extreme on their own. We checked that
+directly: Miami's z-scores against the 9 training cities' distribution are
+*not* extreme marginal outliers (max |z| = 1.07, mean |z| = 0.64), which
+rules out "bad scaling" and is consistent with the joint-coverage
+explanation instead. This is kept in `prepare_solar_data.py`
+(`--location-feature climate_profile`) rather than deleted, so the negative
+result stays reproducible. Lat/lon remains what's actually shipped, because
+it's what performed best across every experiment in this project, not by
+default.
+
+**Extending the same controlled test beyond Miami.** Miami was the first
+city run through `run_learning_curve.py`; the same 27-run (3 sizes × 3
+subset draws × 3 init seeds) protocol was then run holding out Phoenix,
+Seattle, and Minneapolis in turn, training on the other 9 of the original
+10 cities each time:
+
+| Holdout city | 2 cities: mean skill | 5 cities: mean skill | 9 cities: mean skill |
+|---|---|---|---|
+| Miami | −14.0 | −0.98 | −0.086 |
+| Phoenix | −4.81 | −0.21 | **+0.13** |
+| Seattle | −3.49 | −2.01 | −0.58 |
+| Minneapolis | −1.07 | −0.02 | **+0.15** |
+
+Two of three new holdout cities *flip to a positive skill* at 9 training
+cities — the model actually beats smart persistence on a city it never
+trained on, which is the strongest generalization result in this project.
+Seattle is the exception, and it fails for a different, equally checkable
+reason than Miami's: its seasonal *timing* is completely normal (CSI peaks
+in August, same as every other Northern-temperate city here), but its
+*magnitude* is an outlier — the lowest mean clear-sky index of any city in
+the dataset (0.634, versus 0.70–0.91 everywhere else) and the largest
+seasonal swing (0.278). That's the signature of a persistently overcast
+maritime climate, and nothing else in the training set looks like it. Same
+underlying story as Miami, different mechanism: the gap tracks how well the
+held-out city's climate is represented among the training cities, not just
+how many training cities there are.
 
 ## What we'd do next
 
