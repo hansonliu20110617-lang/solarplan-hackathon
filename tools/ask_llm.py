@@ -100,10 +100,12 @@ def _post(url, headers, payload, timeout=60):
 # deterministic -- the identical prompt/settings sometimes used 512 reasoning
 # tokens (fine) and sometimes used the full budget, leaving 0 tokens for the
 # actual answer. 1200 cut it too close for a real code-review prompt; 3000
-# gives enough headroom that exhaustion should be rare. See the empty-content
-# check in ask() below for what happens if it still happens.
+# still wasn't enough for Gemini on a complex multi-function file review
+# (2878 thinking + 118 output = 2996, truncated mid-sentence) -- bumped to
+# 5000. See the truncation checks in ask() below for what happens if it
+# still happens (fail loudly, don't silently return a cut-off answer).
 FAST_MAX_TOKENS = 400
-QUALITY_MAX_TOKENS = 3000
+QUALITY_MAX_TOKENS = 5000
 
 
 def _print_usage(provider, model, usage_line):
@@ -131,7 +133,17 @@ def ask(provider, prompt, model=None, quality=False):
                      f"{um.get('candidatesTokenCount', '?')} output "
                      f"({um.get('thoughtsTokenCount', 0)} thinking) = "
                      f"{um.get('totalTokenCount', '?')} total")
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        candidate = data["candidates"][0]
+        if candidate.get("finishReason") == "MAX_TOKENS":
+            # Same failure mode as the openai/xai branch below: thinking
+            # tokens can eat the whole budget and leave a truncated (or
+            # empty) answer that silently looks like a short-but-complete
+            # response instead of a cut-off one.
+            raise RuntimeError(
+                f"{provider}/{model}: hit MAX_TOKENS ({max_tokens} budget) -- response "
+                "was truncated mid-answer, not a real complete-but-short result"
+            )
+        return candidate["content"]["parts"][0]["text"]
 
     # openai and xai both speak the same chat-completions request/response shape,
     # except openai's newer models reject max_tokens in favor of max_completion_tokens

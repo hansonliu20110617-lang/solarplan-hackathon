@@ -4,40 +4,69 @@ forecast, compared across three climates (Phoenix AZ = sunny/stable, Chicago
 IL = continental/frontal, Seattle WA = cloudy/volatile). Real NASA POWER
 daily data, no API key.
 
-Feature row (today) -> target (tomorrow's solar):
-  [solar_today, temp_today, humidity_today, cloud_today,
-   is_seattle, is_chicago, doy_sin, doy_cos] -> solar_tomorrow
+Predicts the CLEAR-SKY INDEX (actual solar / typical clear-sky maximum for
+that location and day), not raw kWh/m^2 -- this is standard practice in the
+solar-forecasting literature (e.g. Lauret et al. 2022, Solar), and matters
+here for a second reason: raw kWh/m^2 is heavily confounded by latitude and
+season, which a model trained on only 2-3 distinct locations cannot
+actually learn as a *continuous* function of (see
+run_leave_one_city_out.py's result -- a lat/lon model badly failed to
+generalize to an unseen city).
 
-day-of-year is encoded as sin/cos (not the raw integer) so Dec 31 and Jan 1
-are adjacent in feature space instead of 364 apart -- solar output depends
-heavily on season, which persistence captures only indirectly through
-yesterday's single noisy reading.
+The "clear-sky maximum" is a CLIMATOLOGICAL figure -- each location's own
+multi-year (training-years-only) average of NASA POWER's CLRSKY_SFC_SW_DWN
+for that calendar day, not that specific day's raw value. This distinction
+matters and was wrong in an earlier version of this file: CLRSKY_SFC_SW_DWN
+is not a pure astronomical constant -- checking the raw data shows real
+day-to-day variation (e.g. Phoenix's June 15 clear-sky value ranged from
+7.81 to 9.26 kWh/m^2 across 20 different years), because it depends on
+retrieved atmospheric state (aerosols, water vapor), not sun angle alone.
+Using *tomorrow's own raw* CLRSKY value to convert a CSI prediction back to
+kWh would therefore have quietly leaked real information about tomorrow's
+actual atmosphere. The climatological (many-year average, training-years
+only) version has no such problem: it's a fixed, pre-computable number for
+any given calendar day, derivable before any forecast is made.
+
+Feature row (today) -> target (tomorrow's):
+  [csi_today, temp_today, humidity_today, cloud_today,
+   latitude, longitude, doy_sin, doy_cos] -> csi_tomorrow
+
+Location is continuous latitude/longitude, not a one-hot city flag -- a
+one-hot would let the model memorize three fixed slots, useless (and
+misleading) for a city it's never seen. day-of-year is sin/cos encoded so
+Dec 31 and Jan 1 are adjacent in feature space, not 364 apart.
 
 Train/val/test years are CLI-configurable (--train-years/--val-years/
 --test-years, comma-separated) so run_walkforward.py can run this multiple
-times with different fold boundaries without duplicating this file. Defaults
-reproduce the "official" single-fold demo (run_pipeline.py): train on every
-year of data we have before the held-out period, train=2005-2022, val=2023,
-test=2024 -- the most-informed version of the model, same as the last and
-best-trained fold in the 10-fold walk-forward.
+times with different fold boundaries without duplicating this file. The
+three year sets must be disjoint and in non-decreasing chronological order
+(train before val before test) -- an overlap would leak evaluation rows
+into training; a reversed order would (bizarrely) train on data from after
+the period being evaluated. Both are rejected with a clear error rather
+than silently producing a misleading score.
+
+--holdout-city NAME removes that city's rows from train/val entirely (it
+only appears in test), for run_leave_one_city_out.py's generalization
+check -- it must also be present in --cities, or the flag would silently
+do nothing (no row anywhere to remove). The held-out city's decision
+threshold and clear-sky climatology are still computed from its own
+train-year data -- a homeowner's own long-run sense of their local weather
+and typical clear-sky days, not something the forecasting model needs to
+learn, so this isn't leakage into the thing actually being tested
+(next-day forecast accuracy).
 
 Split membership is keyed on the TARGET (tomorrow's) date, not today's -- a
 Dec-31 training example's label is Jan-1 of the next year, and keying on
-today's date would put that label inside the held-out period (the model's
-training loss would then be supervised by a value dated inside
-validation/test, a real if small form of the leakage the brief itself warns
-judges watch for).
+today's date would put that label inside the held-out period.
 
 Writes data.npz in the exact schema preprocess_template.py/train_template.py
-already expect, so those two stages need zero changes. Also writes
-test_meta.npz (city/date/baseline_pred/target/decision_threshold per test
-row, same order as X_test) so validate_template.py can report the
-persistence baseline, a per-city breakdown, and a decision simulation
-("would this forecast have told the homeowner to run the appliance off solar
-tonight, and was that the right call?") against a per-city threshold set
-from training data only -- NASA POWER's -999 missing-data sentinel (and any
-non-finite reading) is dropped, not imputed, since a guessed value here
-would corrupt both the feature and the baseline.
+already expect (X/y now in clear-sky-index units for y), so those two
+stages need zero changes. Also writes test_meta.npz (city/date/
+baseline_pred/target/decision_threshold/tomorrow_clrsky/tomorrow_actual_kwh
+per test row, same order as X_test) so validate_template.py can convert CSI
+predictions back to kWh and run the decision simulation in real-world
+units -- NASA POWER's -999 missing-data sentinel (and any non-finite
+reading) is dropped, not imputed.
 """
 import argparse
 import csv
@@ -50,13 +79,29 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(HERE), "data")
 
-# (name, csv path, [is_seattle, is_chicago] one-hot -- phoenix is the reference city, [0, 0])
+# (name, csv path, latitude, longitude) -- ten cities chosen for climate
+# diversity (desert, coastal, continental, humid subtropical, tropical,
+# high-altitude, Mediterranean), not just the original three, so a
+# leave-one-city-out test has enough distinct training locations to learn a
+# real function of latitude/longitude rather than memorizing a handful of points.
 CITIES = [
-    ("phoenix", os.path.join(DATA_DIR, "phoenix_az.csv"), [0.0, 0.0]),
-    ("seattle", os.path.join(DATA_DIR, "seattle_wa.csv"), [1.0, 0.0]),
-    ("chicago", os.path.join(DATA_DIR, "chicago_il.csv"), [0.0, 1.0]),
+    ("phoenix", os.path.join(DATA_DIR, "phoenix_az.csv"), 33.4484, -112.0740),
+    ("seattle", os.path.join(DATA_DIR, "seattle_wa.csv"), 47.6062, -122.3321),
+    ("chicago", os.path.join(DATA_DIR, "chicago_il.csv"), 41.8781, -87.6298),
+    ("denver", os.path.join(DATA_DIR, "denver_co.csv"), 39.7392, -104.9903),
+    ("miami", os.path.join(DATA_DIR, "miami_fl.csv"), 25.7617, -80.1918),
+    ("minneapolis", os.path.join(DATA_DIR, "minneapolis_mn.csv"), 44.9778, -93.2650),
+    ("albuquerque", os.path.join(DATA_DIR, "albuquerque_nm.csv"), 35.0844, -106.6504),
+    ("houston", os.path.join(DATA_DIR, "houston_tx.csv"), 29.7601, -95.3701),
+    ("losangeles", os.path.join(DATA_DIR, "losangeles_ca.csv"), 34.0522, -118.2437),
+    ("boston", os.path.join(DATA_DIR, "boston_ma.csv"), 42.3601, -71.0589),
 ]
 MISSING_SENTINEL = -900.0  # NASA POWER uses -999; threshold catches formatting variants
+# CSI can run slightly above 1.0 (cloud-enhancement effects can briefly exceed the
+# theoretical clear-sky value) or be driven huge by a near-zero clear-sky denominator
+# in edge cases; clip to a generous but bounded range so one bad ratio can't dominate
+# every error statistic downstream.
+CSI_CLIP = (0.0, 1.5)
 
 
 def _read_city_csv(path):
@@ -69,6 +114,7 @@ def _read_city_csv(path):
         rows.append({
             "date": f"{int(row['YEAR']):04d}-{int(row['MO']):02d}-{int(row['DY']):02d}",
             "sw": float(row["ALLSKY_SFC_SW_DWN"]),
+            "clrsky": float(row["CLRSKY_SFC_SW_DWN"]),
             "t2m": float(row["T2M"]),
             "rh2m": float(row["RH2M"]),
             "cloud": float(row["CLOUD_AMT"]),
@@ -78,12 +124,46 @@ def _read_city_csv(path):
     return rows
 
 
-def _build_examples(rows, city_onehot):
+def _climatological_clrsky(rows, train_years):
+    """Per-calendar-day average CLRSKY_SFC_SW_DWN, computed ONLY from
+    train_years rows -- this is the "typical clear-sky day" figure used as
+    the CSI denominator everywhere (train/val/test alike), so it never
+    depends on the specific day being converted. Missing/non-finite
+    readings are excluded from the average, not treated as zero.
+
+    Keyed by (month, day), not day-of-year: tm_yday shifts by one for every
+    date after Feb 29 in a leap year (day 60 is Feb 29 in a leap year but
+    Mar 1 otherwise), so day-of-year silently averages together different
+    calendar dates across leap/non-leap years -- (month, day) has no such
+    problem. Feb 29 itself only has training data in years when a leap year
+    falls inside train_years; otherwise it falls back to the overall
+    average, same as any other sparse/missing key."""
+    by_date = {}
+    for row in rows:
+        if row["year"] not in train_years:
+            continue
+        clrsky = row["clrsky"]
+        if not np.isfinite(clrsky) or clrsky <= MISSING_SENTINEL or clrsky <= 0:
+            continue
+        d = datetime.date.fromisoformat(row["date"])
+        by_date.setdefault((d.month, d.day), []).append(clrsky)
+    if not by_date:
+        raise SystemExit(
+            "[prepare_solar_data] no usable CLRSKY_SFC_SW_DWN readings in the training "
+            "years -- can't build a clear-sky climatology to normalize against."
+        )
+    overall_fallback = float(np.mean([v for vals in by_date.values() for v in vals]))
+    return {md: float(np.mean(vals)) for md, vals in by_date.items()}, overall_fallback
+
+
+def _build_examples(rows, lat, lon, clim_clrsky, clim_fallback):
     """One example per (today, tomorrow) pair. Drops the last row of the
     series (no tomorrow), any pair touching a missing/non-finite reading,
-    and any pair that isn't actually consecutive days (a gap or duplicate
-    date in the source data would otherwise silently create a multi-day or
-    same-day "forecast")."""
+    and any pair that isn't actually consecutive days. clim_clrsky is the
+    per-calendar-day CLIMATOLOGICAL clear-sky ceiling (see
+    _climatological_clrsky) -- using it instead of that day's own raw
+    CLRSKY value is what makes the kWh conversion in validate_template.py
+    leak-free."""
     examples = []
     skipped_gap = 0
     for i in range(len(rows) - 1):
@@ -96,17 +176,29 @@ def _build_examples(rows, city_onehot):
         values = (today["sw"], today["t2m"], today["rh2m"], today["cloud"], tomorrow["sw"])
         if any(not np.isfinite(v) or v <= MISSING_SENTINEL for v in values):
             continue
-        doy = today_date.timetuple().tm_yday
-        angle = 2 * math.pi * doy / 365.25
+
+        today_ceiling = clim_clrsky.get((today_date.month, today_date.day), clim_fallback)
+        tomorrow_ceiling = clim_clrsky.get((tomorrow_date.month, tomorrow_date.day), clim_fallback)
+
+        today_csi = np.clip(today["sw"] / today_ceiling, *CSI_CLIP)
+        tomorrow_csi = np.clip(tomorrow["sw"] / tomorrow_ceiling, *CSI_CLIP)
+
+        # The sin/cos seasonal feature can stay day-of-year-based: a leap
+        # year shifts its phase by at most 1/365 of a full cycle, a
+        # negligible wobble for a smooth cyclical feature -- unlike the
+        # climatology above, there's no discrete "wrong bucket" failure mode.
+        angle = 2 * math.pi * today_date.timetuple().tm_yday / 365.25
         examples.append({
             "features": [
-                today["sw"], today["t2m"], today["rh2m"], today["cloud"],
-                *city_onehot, math.sin(angle), math.cos(angle),
+                float(today_csi), today["t2m"], today["rh2m"], today["cloud"],
+                lat, lon, math.sin(angle), math.cos(angle),
             ],
-            "target": tomorrow["sw"],
-            "baseline_pred": today["sw"],  # persistence: "tomorrow = today"
+            "target": float(tomorrow_csi),
+            "baseline_pred": float(today_csi),  # persistence in CSI-space: "tomorrow's clearness = today's"
             "date": today["date"],
             "target_year": tomorrow_date.year,  # split membership keys on this, not today's year
+            "tomorrow_clrsky": tomorrow_ceiling,  # climatological -- pre-computable, not a forecast
+            "tomorrow_actual_kwh": tomorrow["sw"],
         })
     if skipped_gap:
         print(f"[prepare_solar_data] skipped {skipped_gap} non-consecutive-day pair(s)")
@@ -121,36 +213,109 @@ def _parse_years(s):
     return {int(y) for y in s.split(",")}
 
 
+def _check_year_sets_disjoint_and_ordered(train_years, val_years, test_years):
+    if train_years & val_years or train_years & test_years or val_years & test_years:
+        raise SystemExit(
+            "[prepare_solar_data] --train-years/--val-years/--test-years overlap -- "
+            "that would put identical examples in both training and evaluation, "
+            "invalidating the evaluation metrics."
+        )
+    # Every year in train must precede every year in val, which must precede
+    # every year in test -- comparing only the closest edges (max(train) vs
+    # min(val)) missed the case of val years that are disjoint from but
+    # *after* test years (e.g. train={2000}, val={2003}, test={2001,2002}).
+    if train_years and val_years and max(train_years) >= min(val_years):
+        raise SystemExit(
+            "[prepare_solar_data] train years aren't entirely before val years -- "
+            "a reversed order would train on data from after the validation period."
+        )
+    if val_years and test_years and max(val_years) >= min(test_years):
+        raise SystemExit(
+            "[prepare_solar_data] val years aren't entirely before test years -- "
+            "a reversed order would let model selection see data from after the "
+            "period being evaluated."
+        )
+    if train_years and test_years and max(train_years) >= min(test_years):
+        raise SystemExit(
+            "[prepare_solar_data] train years aren't entirely before test years -- "
+            "a reversed order would train on data from after the period being evaluated."
+        )
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--train-years", default="2005,2006,2007,2008,2009,2010,2011,2012,2013,"
                                               "2014,2015,2016,2017,2018,2019,2020,2021,2022")
     ap.add_argument("--val-years", default="2023")
     ap.add_argument("--test-years", default="2024")
+    ap.add_argument("--holdout-city", default=None, choices=[c[0] for c in CITIES],
+                     help="remove this city's rows from train/val entirely -- it only "
+                          "appears in test, for a true unseen-location generalization check")
+    ap.add_argument("--cities", default="phoenix,seattle,chicago",
+                     help="comma-separated subset of CITIES to use. Default is the "
+                          "original three (the main submission's scope, already "
+                          "validated extensively) -- run_leave_one_city_out.py passes "
+                          "all ten for the many-location generalization experiment, "
+                          "without changing what the main pipeline/walk-forward use.")
     args = ap.parse_args()
     train_years = _parse_years(args.train_years)
     val_years = _parse_years(args.val_years)
     test_years = _parse_years(args.test_years)
+    _check_year_sets_disjoint_and_ordered(train_years, val_years, test_years)
+
+    active_names = set(args.cities.split(","))
+    unknown = active_names - {c[0] for c in CITIES}
+    if unknown:
+        raise SystemExit(f"[prepare_solar_data] --cities has unknown city name(s): {unknown}")
+    if args.holdout_city and args.holdout_city not in active_names:
+        raise SystemExit(
+            f"[prepare_solar_data] --holdout-city {args.holdout_city} isn't in --cities "
+            f"({sorted(active_names)}) -- there'd be no row anywhere to remove, so this "
+            "would silently run an ordinary (non-holdout) evaluation instead of the "
+            "unseen-city check it looks like it's doing."
+        )
+    active_cities = [c for c in CITIES if c[0] in active_names]
 
     all_examples = {"train": [], "val": [], "test": []}
-    test_meta = {"city": [], "date": [], "baseline_pred": [], "target": [], "decision_threshold": []}
+    test_meta = {"city": [], "date": [], "baseline_pred": [], "target": [], "decision_threshold": [],
+                 "tomorrow_clrsky": [], "tomorrow_actual_kwh": []}
 
-    for city_name, path, city_onehot in CITIES:
+    for city_name, path, lat, lon in active_cities:
         rows = _read_city_csv(path)
-        examples = _build_examples(rows, city_onehot)
+        clim_clrsky, clim_fallback = _climatological_clrsky(rows, train_years)
+        examples = _build_examples(rows, lat, lon, clim_clrsky, clim_fallback)
         print(f"[prepare_solar_data] {city_name}: {len(rows)} daily rows -> {len(examples)} usable examples")
 
         city_splits = {
             split_name: _split(examples, years)
             for split_name, years in (("train", train_years), ("val", val_years), ("test", test_years))
         }
-        # "Enough sun to be worth running an appliance off solar" is defined
-        # per city from TRAINING data only (the city's typical day), never
-        # from test -- using a test-derived threshold would let the decision
-        # simulation peek at the exact period it's being judged on.
-        decision_threshold = float(np.median([e["target"] for e in city_splits["train"]]))
+        # "Enough sun to be worth running an appliance off solar" is a real kWh
+        # threshold (an appliance doesn't care about clear-sky fraction), set
+        # from this city's own TRAINING-period actual kWh, never from test --
+        # and never from a different city, even in --holdout-city mode (a
+        # resident already knows their own area's weather without the model
+        # needing to have trained on it).
+        train_kwh = [e["tomorrow_actual_kwh"] for e in city_splits["train"]]
+        if not train_kwh:
+            raise SystemExit(
+                f"[prepare_solar_data] {city_name} has zero usable training-period "
+                "examples -- can't compute its decision threshold from an empty set "
+                "(check --train-years actually overlaps this city's data)."
+            )
+        decision_threshold = float(np.median(train_kwh))
 
+        is_holdout = city_name == args.holdout_city
+        if is_holdout and not city_splits["test"]:
+            raise SystemExit(
+                f"[prepare_solar_data] --holdout-city {city_name} has zero usable "
+                "test-period examples -- with other cities still providing test rows, "
+                "this would silently run without ever actually evaluating the held-out "
+                "city, defeating the point of the holdout."
+            )
         for split_name, split_examples in city_splits.items():
+            if is_holdout and split_name in ("train", "val"):
+                continue  # this city contributes no training/validation signal at all
             all_examples[split_name].extend(split_examples)
             if split_name == "test":
                 test_meta["city"].extend([city_name] * len(split_examples))
@@ -158,15 +323,17 @@ def main():
                 test_meta["baseline_pred"].extend([e["baseline_pred"] for e in split_examples])
                 test_meta["target"].extend([e["target"] for e in split_examples])
                 test_meta["decision_threshold"].extend([decision_threshold] * len(split_examples))
+                test_meta["tomorrow_clrsky"].extend([e["tomorrow_clrsky"] for e in split_examples])
+                test_meta["tomorrow_actual_kwh"].extend([e["tomorrow_actual_kwh"] for e in split_examples])
 
     def to_arrays(split_name):
         exs = all_examples[split_name]
         if not exs:
             raise SystemExit(
                 f"[prepare_solar_data] '{split_name}' split is empty -- check "
-                "--train-years/--val-years/--test-years against the date range "
-                "actually downloaded, rather than writing a malformed (0,) array "
-                "downstream."
+                "--train-years/--val-years/--test-years (and --holdout-city, which "
+                "removes a whole city from train/val) against the date range actually "
+                "downloaded, rather than writing a malformed (0,) array downstream."
             )
         X = np.array([e["features"] for e in exs], dtype=np.float64)
         y = np.array([e["target"] for e in exs], dtype=np.float64)
@@ -189,16 +356,17 @@ def main():
         baseline_pred=np.array(test_meta["baseline_pred"], dtype=np.float64),
         # kept alongside baseline_pred so validate_template.py can assert its
         # test-split y_true lines up row-for-row with this file, not just
-        # matches it in length -- a silent reordering between the two files
-        # would otherwise pair the wrong city/date with each prediction.
+        # matches it in length.
         target=np.array(test_meta["target"], dtype=np.float64),
-        # that city's median training-period solar value -- the "enough sun"
-        # line the decision simulation in validate_template.py uses, never
-        # derived from test data.
         decision_threshold=np.array(test_meta["decision_threshold"], dtype=np.float64),
+        # known in advance for any date/location -- not a forecast -- so
+        # converting a CSI prediction back to kWh with this introduces no leakage.
+        tomorrow_clrsky=np.array(test_meta["tomorrow_clrsky"], dtype=np.float64),
+        tomorrow_actual_kwh=np.array(test_meta["tomorrow_actual_kwh"], dtype=np.float64),
     )
 
-    print(f"[prepare_solar_data] train={X_train.shape} val={X_val.shape} test={X_test.shape}")
+    print(f"[prepare_solar_data] train={X_train.shape} val={X_val.shape} test={X_test.shape}"
+          + (f"  (holdout city: {args.holdout_city})" if args.holdout_city else ""))
     print(f"[prepare_solar_data] wrote data.npz, test_meta.npz to {HERE}")
 
 

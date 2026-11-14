@@ -10,5 +10,6 @@ pipeline/metrics_summary.json
 pipeline/train_metrics.json
 pipeline/validation_results.json
 pipeline/validation_results_fold_*.json
+pipeline/impact_estimate.json
 walkforward_summary.json
 interface/result.html

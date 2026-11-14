@@ -1,11 +1,13 @@
 """
-Validates the solar forecaster against the real, never-trained-on 2024 test
-rows -- that's this stage's "independent ground truth": data the training
-loop never saw, not fabricated noise (the generic placeholder this file used
-to contain). Reports what judges explicitly ask for: a comparison against the
-persistence baseline ("tomorrow = today"), and a breakdown by city, since the
-whole point of this project is that one city's forecast is far more
-trustworthy than the other's.
+Validates the solar forecaster against the real, never-trained-on test rows
+-- data the training loop never saw. The model is trained to predict the
+CLEAR-SKY INDEX (actual/theoretical-max), not raw kWh (see
+prepare_solar_data.py for why) -- this file reports error in that native
+unit, then converts back to kWh using tomorrow_clrsky (known in advance for
+any date/location, not a forecast, so this introduces no leakage) for the
+decision simulation and for a directly comparable kWh error figure. Also
+reports the forecasting literature's standard skill score (1 - RMSE_model /
+RMSE_baseline; e.g. Nguyen & Mu"sgens) so this isn't just an invented metric.
 """
 import json
 import os
@@ -35,6 +37,8 @@ def _load_test_meta():
         "baseline_pred": np.asarray(data["baseline_pred"], dtype=float),
         "target": np.asarray(data["target"], dtype=float),
         "decision_threshold": np.asarray(data["decision_threshold"], dtype=float),
+        "tomorrow_clrsky": np.asarray(data["tomorrow_clrsky"], dtype=float),
+        "tomorrow_actual_kwh": np.asarray(data["tomorrow_actual_kwh"], dtype=float),
     }
 
 
@@ -47,56 +51,56 @@ def _error_stats(errors):
     if not np.all(np.isfinite(errors)):
         raise SystemExit(
             "[validate] non-finite value in errors -- a NaN/Inf prediction or "
-            "target would otherwise silently write invalid JSON (json.dump "
-            "emits non-standard NaN/Infinity tokens) and corrupt every stat "
-            "derived from it."
+            "target would otherwise silently write invalid JSON and corrupt "
+            "every stat derived from it."
         )
     return {
-        # the brief's own suggested project explicitly asks for mean absolute
-        # error -- median/p95/worst (this project's usual convention, more
-        # robust to the occasional huge storm-front miss) are reported
-        # alongside it, not instead of it.
         "mean_error": float(np.mean(errors)),
         "median_error": float(np.median(errors)),
         "p95_error": float(np.percentile(errors, 95)),
         "worst_error": float(np.max(errors)),
+        "rmse": float(np.sqrt(np.mean(errors ** 2))),
     }
 
 
-def _decision_simulation(y_true, y_pred, baseline_pred, threshold):
+def _skill_score(model_errors, baseline_errors):
+    """Standard solar-forecasting-literature skill score: 1 - RMSE_model /
+    RMSE_baseline. Positive means the model beats the baseline; 0 means tied;
+    negative means the baseline wins. This is the field's own convention,
+    not something invented for this project."""
+    model_rmse = float(np.sqrt(np.mean(model_errors ** 2)))
+    baseline_rmse = float(np.sqrt(np.mean(baseline_errors ** 2)))
+    return 1.0 - (model_rmse / baseline_rmse) if baseline_rmse > 0 else float("nan")
+
+
+def _decision_simulation(true_kwh, model_pred_kwh, baseline_pred_kwh, threshold):
     """"Enough sun to run a high-draw appliance off solar tonight, or charge
     from the grid instead?" -- the actual decision brief §4.3 asks projects to
-    name ("explain what decision your prediction supports"). The oracle
-    decision uses the real tomorrow's value; model/baseline decisions use
-    their own forecasts. Reports how often each forecast's decision would
-    have matched what the homeowner should have actually done, split into
-    the two different-cost mistakes: false confidence (told them there'd be
-    enough sun; there wasn't -- appliance runs short) and false caution (told
-    them there wouldn't be; there was -- a day of free solar wasted)."""
+    name. All three arrays are in kWh (converted from clear-sky-index space
+    using the known-in-advance clear-sky ceiling) so the threshold comparison
+    is physically meaningful. Reports false confidence (said "enough sun",
+    wasn't) and false caution (said "not enough", was) separately, since they
+    cost differently (see pipeline/estimate_impact.py)."""
     if not np.all(np.isfinite(threshold)):
         raise SystemExit(
             "[validate] non-finite decision_threshold -- every >= comparison "
             "against it would be False, making every decision look 'correct' "
             "for that row instead of raising an error."
         )
-    oracle = y_true >= threshold
-    model_decision = y_pred >= threshold
-    baseline_decision = baseline_pred >= threshold
-    # threshold may be one scalar (per-city call) or a per-row array (pooled
-    # call, each row judged against its own city's normal) -- broadcast to
-    # the comparison's shape before reducing to one reportable number.
+    oracle = true_kwh >= threshold
+    model_decision = model_pred_kwh >= threshold
+    baseline_decision = baseline_pred_kwh >= threshold
     threshold_for_reporting = float(np.mean(np.broadcast_to(threshold, oracle.shape)))
 
     def _rates(decision):
         correct = decision == oracle
-        false_confidence = decision & ~oracle  # said "enough sun", wasn't
-        false_caution = ~decision & oracle  # said "not enough", was
-        n = len(oracle)
+        false_confidence = decision & ~oracle
+        false_caution = ~decision & oracle
         return {
             "correct_rate": float(correct.mean()),
             "false_confidence_rate": float(false_confidence.mean()),
             "false_caution_rate": float(false_caution.mean()),
-            "n": int(n),
+            "n": int(len(oracle)),
         }
 
     return {
@@ -113,32 +117,26 @@ def validate(predictions, test_meta):
     # order as X_test (prepare_solar_data.py's city loop), so a boolean mask
     # on "test" lines up positionally with test_meta's arrays.
     test_mask = predictions["split"] == "test"
-    y_true = predictions["y_true"][test_mask].reshape(-1)
-    y_pred = predictions["y_pred"][test_mask].reshape(-1)
-    n = len(y_true)
-    # test_meta.npz's own arrays are built from flat Python lists in
-    # prepare_solar_data.py so they're always 1-D in practice, but a (N, 1)
-    # column vector here would silently broadcast against (N,) targets into
-    # an (N, N) matrix everywhere below -- check the shape, don't assume it.
-    for field in ("baseline_pred", "target", "decision_threshold"):
+    y_true_csi = predictions["y_true"][test_mask].reshape(-1)
+    y_pred_csi = predictions["y_pred"][test_mask].reshape(-1)
+    n = len(y_true_csi)
+    for field in ("baseline_pred", "target", "decision_threshold", "tomorrow_clrsky", "tomorrow_actual_kwh"):
         if test_meta[field].ndim != 1 or test_meta[field].shape[0] != len(test_meta["city"]):
             raise SystemExit(
                 f"[validate] test_meta['{field}'] has shape {test_meta[field].shape}, "
                 f"expected a flat array of length {len(test_meta['city'])} -- would "
                 "silently broadcast into a wrong-shaped result instead of erroring."
             )
-    if n != len(test_meta["city"]) or n != y_pred.shape[0]:
+    if n != len(test_meta["city"]) or n != y_pred_csi.shape[0]:
         raise SystemExit(
             f"predictions.npz has {n} test rows but test_meta.npz has "
             f"{len(test_meta['city'])} -- did prepare_solar_data.py run before "
             "the last train run? Re-run the pipeline from prepare_data."
         )
     # Length matching alone can't catch a silent reorder between the two
-    # files -- test_meta.npz's own "target" (written straight from the same
-    # example that produced y_true) must equal y_true row-for-row, or the
-    # per-city/per-case breakdown below would pair the wrong city/date with
-    # each prediction without any error.
-    if not np.allclose(y_true, test_meta["target"]):
+    # files -- test_meta.npz's own "target" (CSI, written straight from the
+    # same example that produced y_true) must equal y_true row-for-row.
+    if not np.allclose(y_true_csi, test_meta["target"]):
         raise SystemExit(
             "[validate] predictions.npz test rows don't match test_meta.npz's "
             "targets row-for-row -- the two files are out of sync (stale "
@@ -146,8 +144,18 @@ def validate(predictions, test_meta):
             "Re-run prepare_solar_data.py then the rest of the pipeline."
         )
 
-    model_errors = np.abs(y_true - y_pred)
-    baseline_errors = np.abs(y_true - test_meta["baseline_pred"])
+    # Convert clear-sky-index predictions back to kWh using the known-in-advance
+    # clear-sky ceiling for that row's date/location -- this is arithmetic on a
+    # deterministic/astronomical quantity, not a second forecast, so it adds no leakage.
+    clrsky = test_meta["tomorrow_clrsky"]
+    true_kwh = test_meta["tomorrow_actual_kwh"]
+    model_pred_kwh = y_pred_csi * clrsky
+    baseline_pred_kwh = test_meta["baseline_pred"] * clrsky
+
+    csi_model_errors = np.abs(y_true_csi - y_pred_csi)
+    csi_baseline_errors = np.abs(y_true_csi - test_meta["baseline_pred"])
+    kwh_model_errors = np.abs(true_kwh - model_pred_kwh)
+    kwh_baseline_errors = np.abs(true_kwh - baseline_pred_kwh)
 
     cities = test_meta["city"]
     thresholds = test_meta["decision_threshold"]
@@ -156,34 +164,38 @@ def validate(predictions, test_meta):
         mask = cities == city
         per_city[city] = {
             "n": int(mask.sum()),
-            "model": _error_stats(model_errors[mask]),
-            "baseline": _error_stats(baseline_errors[mask]),
+            "model": _error_stats(kwh_model_errors[mask]),
+            "baseline": _error_stats(kwh_baseline_errors[mask]),
+            "csi_model": _error_stats(csi_model_errors[mask]),
+            "csi_baseline": _error_stats(csi_baseline_errors[mask]),
+            "skill_score": _skill_score(kwh_model_errors[mask], kwh_baseline_errors[mask]),
             "decision": _decision_simulation(
-                y_true[mask], y_pred[mask], test_meta["baseline_pred"][mask], thresholds[mask][0]
+                true_kwh[mask], model_pred_kwh[mask], baseline_pred_kwh[mask], thresholds[mask][0]
             ),
         }
 
-    worst_idx = np.argsort(-model_errors)[:5]
+    worst_idx = np.argsort(-kwh_model_errors)[:5]
     cases = [
         {
             "id": int(i),
             "city": str(cities[i]),
             "date": str(test_meta["date"][i]),
-            "true": float(y_true[i]),
-            "pred": float(y_pred[i]),
-            "baseline_pred": float(test_meta["baseline_pred"][i]),
-            "error": float(model_errors[i]),
+            "true": float(true_kwh[i]),
+            "pred": float(model_pred_kwh[i]),
+            "baseline_pred": float(baseline_pred_kwh[i]),
+            "error": float(kwh_model_errors[i]),
         }
         for i in worst_idx
     ]
 
-    model_stats = _error_stats(model_errors)
-    baseline_stats = _error_stats(baseline_errors)
+    model_stats = _error_stats(kwh_model_errors)
+    baseline_stats = _error_stats(kwh_baseline_errors)
+    skill_score = _skill_score(kwh_model_errors, kwh_baseline_errors)
     # Pooled decision simulation uses each row's own city threshold (an
     # array, not one shared number) -- comparing Phoenix's abundant sun and
     # Seattle's scarce sun against a single global cutoff wouldn't mean
     # anything; each city is judged against its own normal.
-    decision = _decision_simulation(y_true, y_pred, test_meta["baseline_pred"], thresholds)
+    decision = _decision_simulation(true_kwh, model_pred_kwh, baseline_pred_kwh, thresholds)
 
     return {
         "n_cases": n,
@@ -192,6 +204,8 @@ def validate(predictions, test_meta):
         "baseline_median_error": baseline_stats["median_error"],
         "baseline_p95_error": baseline_stats["p95_error"],
         "baseline_worst_error": baseline_stats["worst_error"],
+        "baseline_rmse": baseline_stats["rmse"],
+        "skill_score": skill_score,
         "beats_baseline": model_stats["median_error"] < baseline_stats["median_error"],
         "decision": decision,
         "per_city": per_city,
@@ -208,18 +222,21 @@ if __name__ == "__main__":
         "source": (
             "Daily NASA POWER readings for Phoenix AZ, Seattle WA, and Chicago IL "
             "-- held out by calendar year, never touched during training or "
-            "early stopping. Units: kWh/m^2/day. Baseline is the persistence "
-            "rule (tomorrow's solar = today's solar), computed directly from "
-            "the raw data, not from the model."
+            "early stopping. The model predicts the clear-sky index; errors below "
+            "are reported in kWh/m^2/day after converting back with the known "
+            "clear-sky ceiling. Baseline is persistence in clear-sky-index space "
+            "(tomorrow's clearness = today's), computed directly from the raw "
+            "data, not from the model."
         ),
         **result,
         "provenance": {
             "predictions_source": "pipeline/predictions.npz",
             "test_meta_source": "pipeline/test_meta.npz (written by prepare_solar_data.py)",
             "note": (
-                "baseline_pred is today's actual solar reading for that row, not a "
-                "model output. decision_threshold is each city's median TRAINING-period "
-                "solar value, so the decision simulation never peeks at test data."
+                "decision_threshold is each city's median TRAINING-period actual kWh, "
+                "so the decision simulation never peeks at test data. skill_score is "
+                "1 - RMSE_model/RMSE_baseline, the standard solar-forecasting-literature "
+                "definition, not an invented metric."
             ),
         },
     }
@@ -232,7 +249,7 @@ if __name__ == "__main__":
         f"n_cases={output['n_cases']}  "
         f"model_mean={output['mean_error']:.4f}  model_median={output['median_error']:.4f}  "
         f"baseline_mean={output['baseline_mean_error']:.4f}  baseline_median={output['baseline_median_error']:.4f}  "
-        f"beats_baseline={output['beats_baseline']}"
+        f"skill_score={output['skill_score']:+.4f}  beats_baseline={output['beats_baseline']}"
     )
     d = output["decision"]
     print(
@@ -243,7 +260,7 @@ if __name__ == "__main__":
         cd = stats["decision"]
         print(
             f"  {city}: n={stats['n']}  model_mean={stats['model']['mean_error']:.4f}  "
-            f"baseline_mean={stats['baseline']['mean_error']:.4f}  "
+            f"baseline_mean={stats['baseline']['mean_error']:.4f}  skill={stats['skill_score']:+.4f}  "
             f"model_decision_correct={cd['model']['correct_rate']:.1%}  "
             f"baseline_decision_correct={cd['baseline']['correct_rate']:.1%}"
         )

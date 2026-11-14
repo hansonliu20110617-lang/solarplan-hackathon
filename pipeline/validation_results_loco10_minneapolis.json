@@ -1,0 +1,566 @@
+{
+  "source": "Daily NASA POWER readings for Phoenix AZ, Seattle WA, and Chicago IL -- held out by calendar year, never touched during training or early stopping. The model predicts the clear-sky index; errors below are reported in kWh/m^2/day after converting back with the known clear-sky ceiling. Baseline is persistence in clear-sky-index space (tomorrow's clearness = today's), computed directly from the raw data, not from the model.",
+  "n_cases": 3660,
+  "mean_error": 0.7306573237904066,
+  "median_error": 0.5361192814618996,
+  "p95_error": 2.1296261873306293,
+  "worst_error": 5.867288876523482,
+  "rmse": 1.0034120000332682,
+  "baseline_mean_error": 0.8410452896178957,
+  "baseline_median_error": 0.5058670395356591,
+  "baseline_p95_error": 2.861538318586718,
+  "baseline_worst_error": 5.974831114738167,
+  "baseline_rmse": 1.2711459202466975,
+  "skill_score": 0.21062406443586645,
+  "beats_baseline": false,
+  "decision": {
+    "threshold": 4.57467,
+    "oracle_run_off_solar_rate": 0.49863387978142076,
+    "model": {
+      "correct_rate": 0.8743169398907104,
+      "false_confidence_rate": 0.0715846994535519,
+      "false_caution_rate": 0.054098360655737705,
+      "n": 3660
+    },
+    "baseline": {
+      "correct_rate": 0.853551912568306,
+      "false_confidence_rate": 0.07459016393442623,
+      "false_caution_rate": 0.07185792349726776,
+      "n": 3660
+    }
+  },
+  "per_city": {
+    "albuquerque": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.6620077139066199,
+        "median_error": 0.5054102171193091,
+        "p95_error": 1.8420238743250887,
+        "worst_error": 3.466051405810138,
+        "rmse": 0.8848392809266158
+      },
+      "baseline": {
+        "mean_error": 0.7498799304727826,
+        "median_error": 0.48868210133165757,
+        "p95_error": 2.5126372101021577,
+        "worst_error": 4.32472388565235,
+        "rmse": 1.1140641583222195
+      },
+      "csi_model": {
+        "mean_error": 0.10878696974041846,
+        "median_error": 0.08264867931289605,
+        "p95_error": 0.3169610848057643,
+        "worst_error": 0.6552206676815725,
+        "rmse": 0.14790942704601986
+      },
+      "csi_baseline": {
+        "mean_error": 0.1241778484134607,
+        "median_error": 0.07693332501211314,
+        "p95_error": 0.41511751054328383,
+        "worst_error": 0.7798728651209769,
+        "rmse": 0.18645056250895925
+      },
+      "skill_score": 0.2057555444031306,
+      "decision": {
+        "threshold": 5.6117,
+        "oracle_run_off_solar_rate": 0.4890710382513661,
+        "model": {
+          "correct_rate": 0.9016393442622951,
+          "false_confidence_rate": 0.05737704918032787,
+          "false_caution_rate": 0.040983606557377046,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.8797814207650273,
+          "false_confidence_rate": 0.060109289617486336,
+          "false_caution_rate": 0.060109289617486336,
+          "n": 366
+        }
+      }
+    },
+    "boston": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.9469172092051429,
+        "median_error": 0.7397731706499382,
+        "p95_error": 2.5598784203037623,
+        "worst_error": 3.895301095389092,
+        "rmse": 1.2165832553871767
+      },
+      "baseline": {
+        "mean_error": 1.1751235448897255,
+        "median_error": 0.831447260147701,
+        "p95_error": 3.569082531394459,
+        "worst_error": 5.391291510123862,
+        "rmse": 1.6410783336730974
+      },
+      "csi_model": {
+        "mean_error": 0.1876173115201523,
+        "median_error": 0.16870723647412258,
+        "p95_error": 0.4207093619924794,
+        "worst_error": 0.739730487297017,
+        "rmse": 0.22762165168147677
+      },
+      "csi_baseline": {
+        "mean_error": 0.22774953038767884,
+        "median_error": 0.15804004064228605,
+        "p95_error": 0.6699221117421561,
+        "worst_error": 0.7684414380068187,
+        "rmse": 0.30447786584126474
+      },
+      "skill_score": 0.2586683825968298,
+      "decision": {
+        "threshold": 3.4567000000000005,
+        "oracle_run_off_solar_rate": 0.5191256830601093,
+        "model": {
+          "correct_rate": 0.8032786885245902,
+          "false_confidence_rate": 0.10382513661202186,
+          "false_caution_rate": 0.09289617486338798,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.7814207650273224,
+          "false_confidence_rate": 0.11202185792349727,
+          "false_caution_rate": 0.10655737704918032,
+          "n": 366
+        }
+      }
+    },
+    "chicago": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.883564652309886,
+        "median_error": 0.7402153496554504,
+        "p95_error": 2.114197546172138,
+        "worst_error": 4.040922207840918,
+        "rmse": 1.1208346128805644
+      },
+      "baseline": {
+        "mean_error": 1.0774674314721615,
+        "median_error": 0.6408322436234337,
+        "p95_error": 3.6525475278533843,
+        "worst_error": 5.159695679849119,
+        "rmse": 1.5474680472846256
+      },
+      "csi_model": {
+        "mean_error": 0.17129895148272511,
+        "median_error": 0.15253651008174934,
+        "p95_error": 0.3894084159273025,
+        "worst_error": 0.5885476619084684,
+        "rmse": 0.20582865626502145
+      },
+      "csi_baseline": {
+        "mean_error": 0.20495849322993828,
+        "median_error": 0.14611105216162384,
+        "p95_error": 0.581787408595455,
+        "worst_error": 0.7121854998868278,
+        "rmse": 0.2726277313506729
+      },
+      "skill_score": 0.2756977342134358,
+      "decision": {
+        "threshold": 3.565,
+        "oracle_run_off_solar_rate": 0.5655737704918032,
+        "model": {
+          "correct_rate": 0.8579234972677595,
+          "false_confidence_rate": 0.06830601092896176,
+          "false_caution_rate": 0.07377049180327869,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.8278688524590164,
+          "false_confidence_rate": 0.09289617486338798,
+          "false_caution_rate": 0.07923497267759563,
+          "n": 366
+        }
+      }
+    },
+    "denver": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.7664090071300975,
+        "median_error": 0.6136356483312002,
+        "p95_error": 2.0430868484444993,
+        "worst_error": 4.482336615192435,
+        "rmse": 0.9922982220556598
+      },
+      "baseline": {
+        "mean_error": 0.8260128870028387,
+        "median_error": 0.5485286580799866,
+        "p95_error": 2.6184049877917306,
+        "worst_error": 5.974831114738167,
+        "rmse": 1.222995598817826
+      },
+      "csi_model": {
+        "mean_error": 0.1321569867563685,
+        "median_error": 0.11057745037336175,
+        "p95_error": 0.3288157733367715,
+        "worst_error": 0.6885913674217636,
+        "rmse": 0.16756494526040822
+      },
+      "csi_baseline": {
+        "mean_error": 0.14156761633592888,
+        "median_error": 0.09782077232565867,
+        "p95_error": 0.4550846327332364,
+        "worst_error": 0.7343696060395978,
+        "rmse": 0.20050831210260633
+      },
+      "skill_score": 0.18863303922365982,
+      "decision": {
+        "threshold": 4.8475,
+        "oracle_run_off_solar_rate": 0.5245901639344263,
+        "model": {
+          "correct_rate": 0.9098360655737705,
+          "false_confidence_rate": 0.05191256830601093,
+          "false_caution_rate": 0.03825136612021858,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.8961748633879781,
+          "false_confidence_rate": 0.0546448087431694,
+          "false_caution_rate": 0.04918032786885246,
+          "n": 366
+        }
+      }
+    },
+    "houston": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.833585875141826,
+        "median_error": 0.6476286346576647,
+        "p95_error": 2.253755844582077,
+        "worst_error": 3.7878550363710373,
+        "rmse": 1.073515639064234
+      },
+      "baseline": {
+        "mean_error": 0.9364317880199735,
+        "median_error": 0.5877343281875222,
+        "p95_error": 3.046656989445753,
+        "worst_error": 5.777145315327857,
+        "rmse": 1.369054138077406
+      },
+      "csi_model": {
+        "mean_error": 0.14382028171480082,
+        "median_error": 0.11763662333826835,
+        "p95_error": 0.37340300710636815,
+        "worst_error": 0.530099448455299,
+        "rmse": 0.18387517327292457
+      },
+      "csi_baseline": {
+        "mean_error": 0.16364686890148133,
+        "median_error": 0.10655093233443039,
+        "p95_error": 0.5166263446726808,
+        "worst_error": 0.7592289294929091,
+        "rmse": 0.23628568448130804
+      },
+      "skill_score": 0.21587057136265153,
+      "decision": {
+        "threshold": 4.770499999999999,
+        "oracle_run_off_solar_rate": 0.4426229508196721,
+        "model": {
+          "correct_rate": 0.8142076502732241,
+          "false_confidence_rate": 0.10109289617486339,
+          "false_caution_rate": 0.08469945355191257,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.7923497267759563,
+          "false_confidence_rate": 0.10109289617486339,
+          "false_caution_rate": 0.10655737704918032,
+          "n": 366
+        }
+      }
+    },
+    "losangeles": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.45801690345864027,
+        "median_error": 0.30176816010848206,
+        "p95_error": 1.3429686455776255,
+        "worst_error": 3.540533559649356,
+        "rmse": 0.6626642147591584
+      },
+      "baseline": {
+        "mean_error": 0.4958442432423595,
+        "median_error": 0.260381602113414,
+        "p95_error": 1.6670248504653695,
+        "worst_error": 3.46809041958698,
+        "rmse": 0.7845407243292358
+      },
+      "csi_model": {
+        "mean_error": 0.08250413197567974,
+        "median_error": 0.05359189919024521,
+        "p95_error": 0.2686350569031496,
+        "worst_error": 0.47621740751467523,
+        "rmse": 0.11984081309014111
+      },
+      "csi_baseline": {
+        "mean_error": 0.09149332581751815,
+        "median_error": 0.04743004756689784,
+        "p95_error": 0.33910404703883235,
+        "worst_error": 0.5734902058923694,
+        "rmse": 0.14256506637324026
+      },
+      "skill_score": 0.15534758845600916,
+      "decision": {
+        "threshold": 5.764600000000001,
+        "oracle_run_off_solar_rate": 0.48360655737704916,
+        "model": {
+          "correct_rate": 0.9480874316939891,
+          "false_confidence_rate": 0.0273224043715847,
+          "false_caution_rate": 0.02459016393442623,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.9262295081967213,
+          "false_confidence_rate": 0.03551912568306011,
+          "false_caution_rate": 0.03825136612021858,
+          "n": 366
+        }
+      }
+    },
+    "miami": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.6622984685528387,
+        "median_error": 0.4916278029131669,
+        "p95_error": 1.9125426973353035,
+        "worst_error": 5.867288876523482,
+        "rmse": 0.9520738642701624
+      },
+      "baseline": {
+        "mean_error": 0.7466752183787284,
+        "median_error": 0.5071256006909861,
+        "p95_error": 2.155025336188599,
+        "worst_error": 5.678907225467214,
+        "rmse": 1.0668891738245228
+      },
+      "csi_model": {
+        "mean_error": 0.10938894731434481,
+        "median_error": 0.08135553511345989,
+        "p95_error": 0.3142480187044755,
+        "worst_error": 0.7794575652314851,
+        "rmse": 0.1560115736648744
+      },
+      "csi_baseline": {
+        "mean_error": 0.12200100341192624,
+        "median_error": 0.08162781853525936,
+        "p95_error": 0.36804186340462075,
+        "worst_error": 0.7544314405328817,
+        "rmse": 0.17273404033224352
+      },
+      "skill_score": 0.10761690377152955,
+      "decision": {
+        "threshold": 5.0935,
+        "oracle_run_off_solar_rate": 0.453551912568306,
+        "model": {
+          "correct_rate": 0.8661202185792349,
+          "false_confidence_rate": 0.08743169398907104,
+          "false_caution_rate": 0.04644808743169399,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.860655737704918,
+          "false_confidence_rate": 0.06830601092896176,
+          "false_caution_rate": 0.07103825136612021,
+          "n": 366
+        }
+      }
+    },
+    "minneapolis": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.9800146183122618,
+        "median_error": 0.7254189124870654,
+        "p95_error": 2.6008222176698563,
+        "worst_error": 5.32798534967983,
+        "rmse": 1.312162320233322
+      },
+      "baseline": {
+        "mean_error": 1.0893961294647558,
+        "median_error": 0.6854406527447829,
+        "p95_error": 3.6685235945123322,
+        "worst_error": 5.557010336669041,
+        "rmse": 1.609446343813632
+      },
+      "csi_model": {
+        "mean_error": 0.19209061706111583,
+        "median_error": 0.17493037363554642,
+        "p95_error": 0.459058398065488,
+        "worst_error": 0.7282337770428741,
+        "rmse": 0.23446941426690743
+      },
+      "csi_baseline": {
+        "mean_error": 0.20277017907675962,
+        "median_error": 0.14120349995859718,
+        "p95_error": 0.5627210095326814,
+        "worst_error": 0.8603304279845503,
+        "rmse": 0.27416377581011575
+      },
+      "skill_score": 0.1847119816842645,
+      "decision": {
+        "threshold": 3.567099999999998,
+        "oracle_run_off_solar_rate": 0.5355191256830601,
+        "model": {
+          "correct_rate": 0.819672131147541,
+          "false_confidence_rate": 0.10109289617486339,
+          "false_caution_rate": 0.07923497267759563,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.8060109289617486,
+          "false_confidence_rate": 0.10382513661202186,
+          "false_caution_rate": 0.09016393442622951,
+          "n": 366
+        }
+      }
+    },
+    "phoenix": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.4127548150944488,
+        "median_error": 0.23454329040179722,
+        "p95_error": 1.353646232776591,
+        "worst_error": 3.9808289676674775,
+        "rmse": 0.6457834997487448
+      },
+      "baseline": {
+        "mean_error": 0.4535154499031699,
+        "median_error": 0.17187964439186443,
+        "p95_error": 1.7814679948294192,
+        "worst_error": 4.407693741782803,
+        "rmse": 0.813724219386926
+      },
+      "csi_model": {
+        "mean_error": 0.07204974892081584,
+        "median_error": 0.04185459935895064,
+        "p95_error": 0.22900570050228825,
+        "worst_error": 0.475800082191987,
+        "rmse": 0.11096566076633849
+      },
+      "csi_baseline": {
+        "mean_error": 0.0798751571581088,
+        "median_error": 0.026272366847914785,
+        "p95_error": 0.3498777097771637,
+        "worst_error": 0.5439897144771937,
+        "rmse": 0.1382972186661797
+      },
+      "skill_score": 0.20638530307566683,
+      "decision": {
+        "threshold": 6.031899999999999,
+        "oracle_run_off_solar_rate": 0.48633879781420764,
+        "model": {
+          "correct_rate": 0.9480874316939891,
+          "false_confidence_rate": 0.02459016393442623,
+          "false_caution_rate": 0.0273224043715847,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.9234972677595629,
+          "false_confidence_rate": 0.03825136612021858,
+          "false_caution_rate": 0.03825136612021858,
+          "n": 366
+        }
+      }
+    },
+    "seattle": {
+      "n": 366,
+      "model": {
+        "mean_error": 0.7010039747923044,
+        "median_error": 0.5025939387702546,
+        "p95_error": 2.0782155337905484,
+        "worst_error": 3.776900788062791,
+        "rmse": 0.9631222361520267
+      },
+      "baseline": {
+        "mean_error": 0.8601062733324633,
+        "median_error": 0.5792066083212992,
+        "p95_error": 2.5557638937908154,
+        "worst_error": 4.69304215067806,
+        "rmse": 1.2053780893231347
+      },
+      "csi_model": {
+        "mean_error": 0.14120949243383782,
+        "median_error": 0.11830887840547108,
+        "p95_error": 0.3445266470808824,
+        "worst_error": 0.5575852873295758,
+        "rmse": 0.17540764627429717
+      },
+      "csi_baseline": {
+        "mean_error": 0.17559985127649472,
+        "median_error": 0.14640709789999518,
+        "p95_error": 0.4233860017192288,
+        "worst_error": 0.7064744700253581,
+        "rmse": 0.22047135827768077
+      },
+      "skill_score": 0.2009791411648637,
+      "decision": {
+        "threshold": 3.0382,
+        "oracle_run_off_solar_rate": 0.48633879781420764,
+        "model": {
+          "correct_rate": 0.8743169398907104,
+          "false_confidence_rate": 0.09289617486338798,
+          "false_caution_rate": 0.03278688524590164,
+          "n": 366
+        },
+        "baseline": {
+          "correct_rate": 0.8415300546448088,
+          "false_confidence_rate": 0.07923497267759563,
+          "false_caution_rate": 0.07923497267759563,
+          "n": 366
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": 1626,
+      "city": "miami",
+      "date": "2024-06-10",
+      "true": 0.571,
+      "pred": 6.438288876523481,
+      "baseline_pred": 6.249907225467214,
+      "error": 5.867288876523482
+    },
+    {
+      "id": 2015,
+      "city": "minneapolis",
+      "date": "2024-07-03",
+      "true": 2.0717,
+      "pred": 7.39968534967983,
+      "baseline_pred": 7.628710336669041,
+      "error": 5.32798534967983
+    },
+    {
+      "id": 1998,
+      "city": "minneapolis",
+      "date": "2024-06-16",
+      "true": 1.7566,
+      "pred": 6.987166588708735,
+      "baseline_pred": 6.257927368805124,
+      "error": 5.230566588708736
+    },
+    {
+      "id": 1215,
+      "city": "denver",
+      "date": "2024-04-26",
+      "true": 1.3488,
+      "pred": 5.831136615192435,
+      "baseline_pred": 6.304531686188072,
+      "error": 4.482336615192435
+    },
+    {
+      "id": 1927,
+      "city": "minneapolis",
+      "date": "2024-04-06",
+      "true": 0.7625,
+      "pred": 5.117192339960978,
+      "baseline_pred": 5.907103893262014,
+      "error": 4.354692339960978
+    }
+  ],
+  "provenance": {
+    "predictions_source": "pipeline/predictions.npz",
+    "test_meta_source": "pipeline/test_meta.npz (written by prepare_solar_data.py)",
+    "note": "decision_threshold is each city's median TRAINING-period actual kWh, so the decision simulation never peeks at test data. skill_score is 1 - RMSE_model/RMSE_baseline, the standard solar-forecasting-literature definition, not an invented metric."
+  }
+}

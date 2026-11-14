@@ -1,7 +1,7 @@
 # SolarPlan: a next-day solar forecast, compared across three climates
 
 **Track:** AI + Climate
-**Team:** Hanson Liu (solo) — hansonliu20110617@gmail.com — <school — fill in before submitting>
+**Team:** Hanson Liu (solo) — hansonliu20110617@gmail.com — SJS
 
 ## The problem
 
@@ -144,6 +144,33 @@ endpoint is stitched from the first few hours of each model run, so it
 closely tracks the actual outcome rather than being a true day-ahead
 forecast. Using it would have quietly leaked the answer, so we didn't.)
 
+## Impact: what the decision-accuracy gain is actually worth
+
+A percentage point of decision accuracy doesn't mean much until it's priced.
+Using the false-confidence/false-caution rates already measured across all
+ten walk-forward years, plus two real, cited numbers — EIA's 2024 US average
+residential electricity price (16.5¢/kWh) and a stated, deliberately modest
+assumption that a false-confidence mistake (appliance comes up short, needs
+an unplanned top-up) costs 2x a false-caution one (just missed free solar) —
+`pipeline/estimate_impact.py` turns our decision-accuracy numbers into a
+dollar figure per household per year:
+
+| City | Baseline cost/yr | Model cost/yr | Savings/household/yr |
+|---|---|---|---|
+| Chicago | $184.99 | $157.79 | **+$27.21** |
+| Seattle | $134.05 | $113.60 | **+$20.45** |
+| Phoenix | $79.63 | $70.23 | **+$9.40** |
+
+Pooled average: **+$19.02/household/year** — modest for one house, but for
+an illustrative 1,000-household community, that's **~$19,000/year** in
+avoided unnecessary grid draw and avoided shortfall top-ups, from switching
+one decision rule to another at zero marginal hardware cost. This is a
+stated, labeled *estimate* built on two assumptions you can disagree with
+(appliance size, the 2x cost multiplier) — change `APPLIANCE_KWH_PER_DAY` or
+`FALSE_CONFIDENCE_MULTIPLIER` in the script and rerun it for your own
+numbers; the decision-accuracy data underneath it is real and already
+validated across ten independent years.
+
 ## What we'd do next
 
 Get real archived day-ahead forecasts (e.g. via a provider with genuine
@@ -158,6 +185,9 @@ other two cities) firms up or fades with even more independent years.
 
 - [NASA POWER](https://power.larc.nasa.gov/) — daily solar/weather data for
   Phoenix AZ, Seattle WA, and Chicago IL, 2005–2024 (20 years)
+- [EIA](https://www.eia.gov/energyexplained/electricity/prices-and-factors-affecting-prices.php) —
+  2024 US average residential electricity price (16.5¢/kWh), used in the
+  Impact section's dollar estimate
 - Veritas AI Hackathon 2026 Project Briefs, §4.3.1 (Next-day solar energy
   forecast) — starting point, the persistence-baseline idea, and the
   decision-accuracy "make it your own" suggestion
@@ -182,6 +212,8 @@ pipeline/
   train_template.py       from-scratch numpy MLP, early-stopped
   validate_template.py    model vs baseline (mean/median/p95/worst error),
                            per-city breakdown, and the decision simulation
+  estimate_impact.py       turns the walk-forward decision stats into the
+                           $/household/year estimate in Impact, above
   export_template.py      bakes results JSON into interface/result.html
 interface/
   template.html    static results page (no backend, works from file://)
