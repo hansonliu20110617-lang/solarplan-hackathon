@@ -178,6 +178,24 @@ could supply one — it can't without leaking: its "historical forecast"
 endpoint is stitched from the first few hours of each model run, so it
 tracks the actual outcome rather than being a genuine day-ahead forecast.)
 
+**Sanity check: is the MLP actually earning its complexity?** A from-scratch
+neural net is easy to oversell, so `run_ridge_baseline.py` swaps in
+closed-form ridge regression (same preprocessed features, lambda picked by
+validation MSE) and runs it through the identical validation pipeline:
+
+| | Pooled skill | Pooled decision accuracy |
+|---|---|---|
+| Ridge regression | +0.215 | 88.3% (baseline 85.2%) |
+| MLP (shipped) | +0.223 | 88.5% (baseline 85.2%) |
+
+Ridge gets most of the way there on its own — the clear-sky normalization
+and smart-persistence baseline are doing more of the real work than the
+network's nonlinearity. The MLP's edge is real but modest (and in Seattle,
+ridge actually ties it: +0.177 vs +0.174). Worth knowing either way: it
+means the gains in this project aren't an MLP-specific artifact, and it's
+an honest answer to "why not just use linear regression here" instead of
+assuming the fancier model needs no justification.
+
 ## Impact: what the decision-accuracy gain is actually worth
 
 Using the false-confidence/false-caution rates measured across all ten
