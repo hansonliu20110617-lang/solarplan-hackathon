@@ -75,9 +75,10 @@ cities (Phoenix AZ – sunny/stable, Seattle WA – cloudy/volatile, Chicago IL 
 continental/frontal), 7 more for the generalization study (Denver, Miami,
 Minneapolis, Albuquerque, Houston, Los Angeles, Boston — chosen for climate
 diversity: desert, tropical, snowy continental, high-altitude, humid
-subtropical, Mediterranean, coastal), and 3 added later specifically to
-test and fix the generalization gaps found (Honolulu, Tampa, Portland — see
-*Generalization*).
+subtropical, Mediterranean, coastal), and 5 added later specifically to
+test and fix the generalization gaps found (Honolulu, Tampa, Portland used
+in actual training runs; San Juan and New Orleans screened by curve
+correlation only, never trained on — see *Generalization*).
 
 **Clear-sky index, not raw kWh.** The model predicts tomorrow's actual solar
 ÷ a *climatological* clear-sky ceiling for that location and calendar day —
@@ -288,7 +289,16 @@ little, one made things much worse.**
 training-set size, same holdout) roughly halved the mean skill deficit
 (−0.086 → −0.039 across 3 seeds) but was noisy (−0.071, −0.072, +0.027) and
 didn't move decision accuracy (~81% either way) — suggestive, not a clean
-fix with just one matched city.
+fix with just one matched city. Before spending more training runs chasing
+a better match, two more candidates were screened the cheap way — compare
+monthly CSI *curve correlation* with Miami's, no training involved — and
+both ruled out: San Juan, PR (actually tropical by Köppen classification,
+which made it the obvious next guess) correlates at −0.045 with Miami's
+curve, and New Orleans, LA at −0.055, both far worse than Tampa's 0.614.
+Climate-label intuition ("more tropical" should mean "more similar") isn't
+what predicts a good swap candidate here — curve correlation is, and by
+that measure Tampa isn't an arbitrary choice, it's a genuine standout among
+the plausible options checked so far.
 
 *Reframing the target as an anomaly* (predicting the deviation from Miami's
 own monthly climatological CSI, instead of the absolute CSI level — the
@@ -382,10 +392,13 @@ being a generalization failure at all.
 Get genuine archived day-ahead forecasts (with real, verified lead time,
 unlike Open-Meteo's archive) to attack the storm-front failure case, which
 nothing in this project currently can see coming. On the generalization
-side: Miami's gap is still only partially explained by one swap test
-(Tampa helped some, noisily) — a systematic search over more candidate
-swaps, the way the clean Portland result closed Seattle's gap, could do
-the same for Miami. We also added a paired t-test alongside the sign test for the
+side: Miami's gap is still only partially closed (Tampa helped some,
+noisily, and it's the best of the three candidates screened by curve
+correlation so far — San Juan and New Orleans were both ruled out cheaply
+before training on them). No candidate found yet matches Tampa the way
+Portland matched Seattle; a wider, more systematic search over Gulf/
+Caribbean coastal cities, still screened by curve correlation first, could
+still find one. We also added a paired t-test alongside the sign test for the
 walk-forward comparison (it's what caught Phoenix's real-but-easy-to-miss
 effect — see Results); a further step would be a true per-day
 Diebold-Mariano test with autocorrelation-robust (HAC) variance on the
@@ -396,7 +409,8 @@ and matters more the more serial correlation there is within a test year.
 ## Sources
 
 - [NASA POWER](https://power.larc.nasa.gov/) — daily solar/weather data,
-  13 US cities, 2005–2024
+  15 US/PR cities, 2005–2024 (13 used in actual training runs; San Juan and
+  New Orleans fetched only for the curve-correlation screening check)
 - [EIA](https://www.eia.gov/energyexplained/electricity/prices-and-factors-affecting-prices.php) —
   2024 US average residential electricity price (16.5¢/kWh)
 - Veritas AI Hackathon 2026 Project Briefs, §4.3.1 — starting point, the
@@ -427,7 +441,7 @@ and matters more the more serial correlation there is within a test year.
 ## Repo structure / how to reproduce
 
 ```
-data/              raw NASA POWER CSVs, 13 cities, 2005-2024 (committed, so
+data/              raw NASA POWER CSVs, 15 cities, 2005-2024 (committed, so
                    the pipeline runs offline with no re-download)
 pipeline/
   prepare_solar_data.py    builds features/target (clear-sky index), splits
@@ -449,6 +463,9 @@ run_walkforward.py         runs all ten 3-city folds (2015-2024) + sign
 run_ridge_baseline.py      swaps closed-form ridge regression into the
                            shipped pipeline as a sanity check against the
                            MLP -- produces the ridge-vs-MLP table above
+check_climate_curve_match.py  cheap pre-screen for a swap candidate's
+                           monthly CSI curve correlation with the holdout
+                           city's, before spending a training run on it
 run_leave_one_city_out.py  the first (confounded) 10-city generalization
                            check -- superseded by run_learning_curve.py
                            below, kept for the record
