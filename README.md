@@ -132,25 +132,27 @@ cities**, sign-test p = 0.00195 each:
 **Decision accuracy is honest, but messier.** Translated into the actual
 yes/no decision (same ten folds):
 
-| City | Folds model wins | Mean advantage | Sign-test p | Real effect? |
-|---|---|---|---|---|
-| Seattle | 10 / 10 | +2.8 pts | 0.0020 | Yes |
-| Chicago | 9 / 10 | +3.9 pts | 0.0215 | Yes, weaker |
-| Phoenix | 7 / 10 | +1.0 pt | 0.3438 | Not distinguishable from chance |
+| City | Folds model wins | Mean advantage | Sign-test p | Paired t-test p | Real effect? |
+|---|---|---|---|---|---|
+| Seattle | 10 / 10 | +2.8 pts | 0.0020 | <0.0001 (t=7.44, df=9) | Yes |
+| Chicago | 9 / 10 | +3.9 pts | 0.0215 | 0.0003 (t=5.80, df=9) | Yes |
+| Phoenix | 7 / 10 | +1.0 pt | 0.3438 | **0.0349** (t=2.48, df=9) | Yes — sign test alone missed this |
 
-These two tables disagree on Phoenix on purpose, and that disagreement is
-informative, not a contradiction: decision accuracy only looks at which side
-of one threshold a prediction lands on, throwing away the continuous error
-signal that skill score uses in full. In Phoenix — where persistence is
-already excellent and most days land solidly on one side of the threshold —
-a small, real, consistent error improvement (confirmed by skill score) often
-isn't large enough to flip the occasional borderline day's binary decision.
-**Caveat on both tables:** a 10/10 record always produces the same minimum
-possible p-value (0.00195, or one-sided 0.00098) regardless of margin — it
-confirms *direction* reliably, not *size*. And the ten years aren't fully
-independent trials (overlapping expanding training windows; real multi-year
-weather correlation like ENSO), so read these p-values as "extremely
-unlikely to be pure chance," not a textbook-exact guarantee.
+Phoenix is the case this second test earns its place for. The sign test only
+asks "how often did the model win," and a 7/10 record isn't distinguishable
+from chance on its own — but the paired t-test asks the sharper question of
+how large each win or loss was, and on that question Phoenix's wins are
+consistently bigger than its losses (mean +1.0 pt, t=2.48), which clears
+p<0.05. That's the same information the skill-score table already pointed
+to (Phoenix's skill is positive in all 10 folds); the t-test is what lets
+decision accuracy agree with it instead of looking contradictory.
+**Caveat on all three tests:** a 10/10 sign-test record always produces the
+same minimum possible p-value (0.00195) regardless of margin — it confirms
+*direction* reliably, not *size*, which is exactly the gap the t-test fills.
+Both tests assume the ten years are independent trials, which is only
+approximately true (overlapping expanding training windows; real multi-year
+weather correlation like ENSO) — read these p-values as "extremely unlikely
+to be pure chance," not a textbook-exact guarantee.
 
 **The official single demo** (trained on 2005–2022, tested on 2024, the
 same numbers `run_pipeline.py` reproduces):
@@ -335,11 +337,15 @@ Get genuine archived day-ahead forecasts (with real, verified lead time,
 unlike Open-Meteo's archive) to attack the storm-front failure case, which
 nothing in this project currently can see coming. On the generalization
 side: a systematic single-city-swap search (not just the one Tampa test)
-to see which other training-city changes help or hurt Miami, and a more
-statistically rigorous test than the sign test for the walk-forward
-comparison (a Diebold-Mariano test with autocorrelation-robust variance,
-which doesn't assume the ten years are fully independent the way a sign
-test does).
+to see which other training-city changes help or hurt Miami and Seattle,
+and more multi-seed confirmation of the single-seed anomaly-target-mode
+result. We also added a paired t-test alongside the sign test for the
+walk-forward comparison (it's what caught Phoenix's real-but-easy-to-miss
+effect — see Results); a further step would be a true per-day
+Diebold-Mariano test with autocorrelation-robust (HAC) variance on the
+daily loss series within each fold, which is a strictly finer-grained
+question than "is each fold's year-level mean distinguishable from chance,"
+and matters more the more serial correlation there is within a test year.
 
 ## Sources
 

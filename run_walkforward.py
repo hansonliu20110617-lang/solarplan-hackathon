@@ -12,10 +12,14 @@ how this would actually be deployed and retrained over time.
 
 Runs prepare_solar_data -> preprocess -> train -> validate for each fold via
 subprocess (same approach as run_pipeline.py). Saves each fold's
-validation_results.json under a fold-specific name, then runs a paired sign
-test (exact binomial, no scipy needed) on each city's per-fold decision-
-accuracy difference (model - baseline) to ask: across folds, does the model
-beat the baseline more often than chance would predict?
+validation_results.json under a fold-specific name, then runs two
+significance tests on each city's per-fold decision-accuracy difference
+(model - baseline): a sign test (exact binomial, asks only "how often did
+the model win") and a paired t-test (asks "how often, weighted by how much
+each fold's win or loss was worth" -- pure-Python Student's-t via the
+regularized incomplete beta, no scipy). The t-test matters most exactly
+where the sign test alone is inconclusive: a city can have an unremarkable
+win/loss record but still show a real, consistent-in-magnitude effect.
 
 Honest caveat on that test: the sign test's p-value is exact only under
 independent trials, and these ten folds are not fully independent -- the
@@ -54,6 +58,73 @@ def run(cmd):
     if result.returncode != 0:
         print(f"Command failed: {' '.join(cmd)} -- stopping.")
         sys.exit(result.returncode)
+
+
+def _reg_incomplete_beta(x, a, b):
+    """Regularized incomplete beta function I_x(a, b) via Lentz's continued
+    fraction (Numerical Recipes 6.4) -- pure math, no scipy. Needed for the
+    Student's-t CDF below."""
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    ln_beta = (math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
+               + a * math.log(x) + b * math.log(1.0 - x))
+    front = math.exp(ln_beta) / a
+    if x >= (a + 1.0) / (a + b + 2.0):
+        return 1.0 - _reg_incomplete_beta(1.0 - x, b, a)
+
+    f, c, d = 1.0, 1.0, 0.0
+    for i in range(200):
+        m = i // 2
+        if i == 0:
+            numerator = 1.0
+        elif i % 2 == 0:
+            numerator = (m * (b - m) * x) / ((a + 2 * m - 1) * (a + 2 * m))
+        else:
+            numerator = -((a + m) * (a + b + m) * x) / ((a + 2 * m) * (a + 2 * m + 1))
+        d = 1.0 + numerator * d
+        if abs(d) < 1e-30:
+            d = 1e-30
+        d = 1.0 / d
+        c = 1.0 + numerator / c
+        if abs(c) < 1e-30:
+            c = 1e-30
+        f *= d * c
+        if abs(1.0 - d * c) < 1e-10:
+            break
+    return front * (f - 1.0)
+
+
+def student_t_two_sided_p(t_stat, df):
+    """Two-sided p-value for Student's t, via the regularized incomplete
+    beta function -- the same quantity scipy.stats.t.sf uses internally."""
+    x = df / (df + t_stat * t_stat)
+    return _reg_incomplete_beta(x, df / 2.0, 0.5)
+
+
+def paired_t_test(diffs):
+    """Paired t-test on a list of per-fold differences (e.g. model minus
+    baseline decision accuracy, one value per independent test year).
+    Complements the sign test above: the sign test only asks "how often did
+    the model win," throwing away how big each win or loss was -- this uses
+    that magnitude too, which matters most exactly when the win count alone
+    isn't decisive (e.g. a 7/10 record where the wins are consistently
+    bigger than the losses). Same independence caveat as the sign test:
+    treats each fold's mean as one independent observation, which is only
+    approximately true given the expanding training window and real
+    multi-year weather correlation."""
+    n = len(diffs)
+    if n < 2:
+        return {"t_statistic": None, "p_value": 1.0, "df": 0}
+    mean = sum(diffs) / n
+    variance = sum((d - mean) ** 2 for d in diffs) / (n - 1)
+    std = math.sqrt(variance)
+    if std == 0:
+        return {"t_statistic": None, "p_value": 0.0 if mean != 0 else 1.0, "df": n - 1}
+    t_stat = mean / (std / math.sqrt(n))
+    p_value = student_t_two_sided_p(t_stat, n - 1)
+    return {"t_statistic": t_stat, "p_value": p_value, "df": n - 1}
 
 
 def sign_test_p_value(n_favor_a, n_total):
@@ -102,16 +173,19 @@ def main():
     pooled_losses = sum(1 for d in pooled_diffs if d < 0)
     pooled_decisive = pooled_wins + pooled_losses  # excludes exact ties, same as the per-city test below
     pooled_p = sign_test_p_value(pooled_wins, pooled_decisive)
+    pooled_t = paired_t_test(pooled_diffs)
     significance["_pooled_mean_error"] = {
         "per_fold_diff_baseline_minus_model": pooled_diffs,
         "mean_diff": sum(pooled_diffs) / len(pooled_diffs),
         "folds_model_wins": pooled_wins,
         "folds_tied": len(pooled_diffs) - pooled_decisive,
         "sign_test_p_value": pooled_p,
+        "paired_t_test": pooled_t,
     }
     print(f"\npooled (all cities): model beat baseline's mean error in "
           f"{pooled_wins}/{len(pooled_diffs)} folds, mean difference "
-          f"{sum(pooled_diffs) / len(pooled_diffs):+.4f} kWh/m2/day, sign-test p={pooled_p:.5f}")
+          f"{sum(pooled_diffs) / len(pooled_diffs):+.4f} kWh/m2/day, sign-test p={pooled_p:.5f}, "
+          f"paired t-test p={pooled_t['p_value']:.5f} (t={pooled_t['t_statistic']:.2f}, df={pooled_t['df']})")
 
     for city in cities:
         diffs = []
@@ -123,6 +197,7 @@ def main():
         n_ties = len(diffs) - n_model_wins - n_baseline_wins
         n_decisive = n_model_wins + n_baseline_wins
         p_value = sign_test_p_value(n_model_wins, n_decisive)
+        t_result = paired_t_test(diffs)
         mean_diff = sum(diffs) / len(diffs)
         significance[city] = {
             "per_fold_diff_model_minus_baseline": diffs,
@@ -131,11 +206,13 @@ def main():
             "folds_baseline_wins": n_baseline_wins,
             "folds_tied": n_ties,
             "sign_test_p_value": p_value,
+            "paired_t_test": t_result,
         }
         print(f"\n{city}: model beat baseline's decision accuracy in "
               f"{n_model_wins}/{len(diffs)} folds (baseline won {n_baseline_wins}, "
               f"tied {n_ties}), mean difference {mean_diff:+.1%}, "
-              f"sign-test p={p_value:.4f}")
+              f"sign-test p={p_value:.4f}, paired t-test p={t_result['p_value']:.4f} "
+              f"(t={t_result['t_statistic']:.2f}, df={t_result['df']})")
 
     summary_path = ROOT / "walkforward_summary.json"
     with open(summary_path, "w") as f:
