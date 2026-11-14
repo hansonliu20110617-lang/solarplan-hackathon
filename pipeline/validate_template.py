@@ -34,6 +34,7 @@ def _load_test_meta():
         "date": np.asarray(data["date"]),
         "baseline_pred": np.asarray(data["baseline_pred"], dtype=float),
         "target": np.asarray(data["target"], dtype=float),
+        "decision_threshold": np.asarray(data["decision_threshold"], dtype=float),
     }
 
 
@@ -51,9 +52,58 @@ def _error_stats(errors):
             "derived from it."
         )
     return {
+        # the brief's own suggested project explicitly asks for mean absolute
+        # error -- median/p95/worst (this project's usual convention, more
+        # robust to the occasional huge storm-front miss) are reported
+        # alongside it, not instead of it.
+        "mean_error": float(np.mean(errors)),
         "median_error": float(np.median(errors)),
         "p95_error": float(np.percentile(errors, 95)),
         "worst_error": float(np.max(errors)),
+    }
+
+
+def _decision_simulation(y_true, y_pred, baseline_pred, threshold):
+    """"Enough sun to run a high-draw appliance off solar tonight, or charge
+    from the grid instead?" -- the actual decision brief §4.3 asks projects to
+    name ("explain what decision your prediction supports"). The oracle
+    decision uses the real tomorrow's value; model/baseline decisions use
+    their own forecasts. Reports how often each forecast's decision would
+    have matched what the homeowner should have actually done, split into
+    the two different-cost mistakes: false confidence (told them there'd be
+    enough sun; there wasn't -- appliance runs short) and false caution (told
+    them there wouldn't be; there was -- a day of free solar wasted)."""
+    if not np.all(np.isfinite(threshold)):
+        raise SystemExit(
+            "[validate] non-finite decision_threshold -- every >= comparison "
+            "against it would be False, making every decision look 'correct' "
+            "for that row instead of raising an error."
+        )
+    oracle = y_true >= threshold
+    model_decision = y_pred >= threshold
+    baseline_decision = baseline_pred >= threshold
+    # threshold may be one scalar (per-city call) or a per-row array (pooled
+    # call, each row judged against its own city's normal) -- broadcast to
+    # the comparison's shape before reducing to one reportable number.
+    threshold_for_reporting = float(np.mean(np.broadcast_to(threshold, oracle.shape)))
+
+    def _rates(decision):
+        correct = decision == oracle
+        false_confidence = decision & ~oracle  # said "enough sun", wasn't
+        false_caution = ~decision & oracle  # said "not enough", was
+        n = len(oracle)
+        return {
+            "correct_rate": float(correct.mean()),
+            "false_confidence_rate": float(false_confidence.mean()),
+            "false_caution_rate": float(false_caution.mean()),
+            "n": int(n),
+        }
+
+    return {
+        "threshold": threshold_for_reporting,
+        "oracle_run_off_solar_rate": float(oracle.mean()),
+        "model": _rates(model_decision),
+        "baseline": _rates(baseline_decision),
     }
 
 
@@ -66,6 +116,17 @@ def validate(predictions, test_meta):
     y_true = predictions["y_true"][test_mask].reshape(-1)
     y_pred = predictions["y_pred"][test_mask].reshape(-1)
     n = len(y_true)
+    # test_meta.npz's own arrays are built from flat Python lists in
+    # prepare_solar_data.py so they're always 1-D in practice, but a (N, 1)
+    # column vector here would silently broadcast against (N,) targets into
+    # an (N, N) matrix everywhere below -- check the shape, don't assume it.
+    for field in ("baseline_pred", "target", "decision_threshold"):
+        if test_meta[field].ndim != 1 or test_meta[field].shape[0] != len(test_meta["city"]):
+            raise SystemExit(
+                f"[validate] test_meta['{field}'] has shape {test_meta[field].shape}, "
+                f"expected a flat array of length {len(test_meta['city'])} -- would "
+                "silently broadcast into a wrong-shaped result instead of erroring."
+            )
     if n != len(test_meta["city"]) or n != y_pred.shape[0]:
         raise SystemExit(
             f"predictions.npz has {n} test rows but test_meta.npz has "
@@ -89,6 +150,7 @@ def validate(predictions, test_meta):
     baseline_errors = np.abs(y_true - test_meta["baseline_pred"])
 
     cities = test_meta["city"]
+    thresholds = test_meta["decision_threshold"]
     per_city = {}
     for city in sorted(set(cities.tolist())):
         mask = cities == city
@@ -96,6 +158,9 @@ def validate(predictions, test_meta):
             "n": int(mask.sum()),
             "model": _error_stats(model_errors[mask]),
             "baseline": _error_stats(baseline_errors[mask]),
+            "decision": _decision_simulation(
+                y_true[mask], y_pred[mask], test_meta["baseline_pred"][mask], thresholds[mask][0]
+            ),
         }
 
     worst_idx = np.argsort(-model_errors)[:5]
@@ -114,14 +179,21 @@ def validate(predictions, test_meta):
 
     model_stats = _error_stats(model_errors)
     baseline_stats = _error_stats(baseline_errors)
+    # Pooled decision simulation uses each row's own city threshold (an
+    # array, not one shared number) -- comparing Phoenix's abundant sun and
+    # Seattle's scarce sun against a single global cutoff wouldn't mean
+    # anything; each city is judged against its own normal.
+    decision = _decision_simulation(y_true, y_pred, test_meta["baseline_pred"], thresholds)
 
     return {
         "n_cases": n,
         **model_stats,
+        "baseline_mean_error": baseline_stats["mean_error"],
         "baseline_median_error": baseline_stats["median_error"],
         "baseline_p95_error": baseline_stats["p95_error"],
         "baseline_worst_error": baseline_stats["worst_error"],
         "beats_baseline": model_stats["median_error"] < baseline_stats["median_error"],
+        "decision": decision,
         "per_city": per_city,
         "cases": cases,
     }
@@ -134,8 +206,8 @@ if __name__ == "__main__":
 
     output = {
         "source": (
-            "2024 daily NASA POWER readings for Phoenix AZ and Seattle WA -- "
-            "held out by calendar year, never touched during training or "
+            "Daily NASA POWER readings for Phoenix AZ, Seattle WA, and Chicago IL "
+            "-- held out by calendar year, never touched during training or "
             "early stopping. Units: kWh/m^2/day. Baseline is the persistence "
             "rule (tomorrow's solar = today's solar), computed directly from "
             "the raw data, not from the model."
@@ -144,7 +216,11 @@ if __name__ == "__main__":
         "provenance": {
             "predictions_source": "pipeline/predictions.npz",
             "test_meta_source": "pipeline/test_meta.npz (written by prepare_solar_data.py)",
-            "note": "baseline_pred is today's actual solar reading for that row, not a model output",
+            "note": (
+                "baseline_pred is today's actual solar reading for that row, not a "
+                "model output. decision_threshold is each city's median TRAINING-period "
+                "solar value, so the decision simulation never peeks at test data."
+            ),
         },
     }
 
@@ -154,12 +230,20 @@ if __name__ == "__main__":
     print(f"Saved {RESULTS_PATH}")
     print(
         f"n_cases={output['n_cases']}  "
-        f"model_median={output['median_error']:.4f}  "
-        f"baseline_median={output['baseline_median_error']:.4f}  "
+        f"model_mean={output['mean_error']:.4f}  model_median={output['median_error']:.4f}  "
+        f"baseline_mean={output['baseline_mean_error']:.4f}  baseline_median={output['baseline_median_error']:.4f}  "
         f"beats_baseline={output['beats_baseline']}"
     )
+    d = output["decision"]
+    print(
+        f"  decision (pooled): model_correct={d['model']['correct_rate']:.1%}  "
+        f"baseline_correct={d['baseline']['correct_rate']:.1%}"
+    )
     for city, stats in output["per_city"].items():
+        cd = stats["decision"]
         print(
-            f"  {city}: n={stats['n']}  model_median={stats['model']['median_error']:.4f}  "
-            f"baseline_median={stats['baseline']['median_error']:.4f}"
+            f"  {city}: n={stats['n']}  model_mean={stats['model']['mean_error']:.4f}  "
+            f"baseline_mean={stats['baseline']['mean_error']:.4f}  "
+            f"model_decision_correct={cd['model']['correct_rate']:.1%}  "
+            f"baseline_decision_correct={cd['baseline']['correct_rate']:.1%}"
         )

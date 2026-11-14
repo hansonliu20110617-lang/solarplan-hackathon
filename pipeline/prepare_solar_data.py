@@ -28,9 +28,12 @@ judges watch for).
 
 Writes data.npz in the exact schema preprocess_template.py/train_template.py
 already expect, so those two stages need zero changes. Also writes
-test_meta.npz (city/date/baseline_pred/target per test row, same order as
-X_test) so validate_template.py can report the persistence baseline and a
-per-city breakdown -- NASA POWER's -999 missing-data sentinel (and any
+test_meta.npz (city/date/baseline_pred/target/decision_threshold per test
+row, same order as X_test) so validate_template.py can report the
+persistence baseline, a per-city breakdown, and a decision simulation
+("would this forecast have told the homeowner to run the appliance off solar
+tonight, and was that the right call?") against a per-city threshold set
+from training data only -- NASA POWER's -999 missing-data sentinel (and any
 non-finite reading) is dropped, not imputed, since a guessed value here
 would corrupt both the feature and the baseline.
 """
@@ -127,21 +130,31 @@ def main():
     test_years = _parse_years(args.test_years)
 
     all_examples = {"train": [], "val": [], "test": []}
-    test_meta = {"city": [], "date": [], "baseline_pred": [], "target": []}
+    test_meta = {"city": [], "date": [], "baseline_pred": [], "target": [], "decision_threshold": []}
 
     for city_name, path, city_onehot in CITIES:
         rows = _read_city_csv(path)
         examples = _build_examples(rows, city_onehot)
         print(f"[prepare_solar_data] {city_name}: {len(rows)} daily rows -> {len(examples)} usable examples")
 
-        for split_name, years in (("train", train_years), ("val", val_years), ("test", test_years)):
-            split_examples = _split(examples, years)
+        city_splits = {
+            split_name: _split(examples, years)
+            for split_name, years in (("train", train_years), ("val", val_years), ("test", test_years))
+        }
+        # "Enough sun to be worth running an appliance off solar" is defined
+        # per city from TRAINING data only (the city's typical day), never
+        # from test -- using a test-derived threshold would let the decision
+        # simulation peek at the exact period it's being judged on.
+        decision_threshold = float(np.median([e["target"] for e in city_splits["train"]]))
+
+        for split_name, split_examples in city_splits.items():
             all_examples[split_name].extend(split_examples)
             if split_name == "test":
                 test_meta["city"].extend([city_name] * len(split_examples))
                 test_meta["date"].extend([e["date"] for e in split_examples])
                 test_meta["baseline_pred"].extend([e["baseline_pred"] for e in split_examples])
                 test_meta["target"].extend([e["target"] for e in split_examples])
+                test_meta["decision_threshold"].extend([decision_threshold] * len(split_examples))
 
     def to_arrays(split_name):
         exs = all_examples[split_name]
@@ -176,6 +189,10 @@ def main():
         # matches it in length -- a silent reordering between the two files
         # would otherwise pair the wrong city/date with each prediction.
         target=np.array(test_meta["target"], dtype=np.float64),
+        # that city's median training-period solar value -- the "enough sun"
+        # line the decision simulation in validate_template.py uses, never
+        # derived from test data.
+        decision_threshold=np.array(test_meta["decision_threshold"], dtype=np.float64),
     )
 
     print(f"[prepare_solar_data] train={X_train.shape} val={X_val.shape} test={X_test.shape}")

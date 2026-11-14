@@ -50,6 +50,7 @@
   <h1>Solar Forecast Results</h1>
   <div id="summary">Loading...</div>
   <div id="baseline-compare"></div>
+  <div id="decision-sim"></div>
   <div id="city-breakdown"></div>
   <h2>Worst-case examples</h2>
   <table id="cases-table">
@@ -94,18 +95,40 @@ window.RESULTS_DATA = __RESULTS_JSON__;
       " the baseline on median error.</div>";
   }
 
+  function pct(n) {
+    return (typeof n === "number") ? (n * 100).toFixed(1) + "%" : String(n);
+  }
+
+  var decisionEl = document.getElementById("decision-sim");
+  if (data.decision) {
+    var d = data.decision;
+    decisionEl.innerHTML =
+      "<div id=\"summary\"><strong>The decision that actually matters</strong> &mdash; " +
+      "\"enough sun to run a high-draw appliance off solar tonight, or charge from the grid?\" " +
+      "Our model's yes/no call matched what the homeowner should have actually done " +
+      "<strong>" + pct(d.model.correct_rate) + "</strong> of the time, vs. " +
+      "<strong>" + pct(d.baseline.correct_rate) + "</strong> for the naive persistence rule.</div>";
+  }
+
   var cityEl = document.getElementById("city-breakdown");
   if (data.per_city) {
     var rows = "";
     Object.keys(data.per_city).sort().forEach(function (city) {
       var c = data.per_city[city];
+      var cd = c.decision || {};
       rows += "<tr><td>" + city + "</td><td>" + c.n + "</td>" +
+        "<td>" + fmt(c.model.mean_error) + "</td>" +
+        "<td>" + fmt(c.baseline.mean_error) + "</td>" +
         "<td>" + fmt(c.model.median_error) + "</td>" +
-        "<td>" + fmt(c.baseline.median_error) + "</td></tr>";
+        "<td>" + fmt(c.baseline.median_error) + "</td>" +
+        "<td>" + pct(cd.model && cd.model.correct_rate) + "</td>" +
+        "<td>" + pct(cd.baseline && cd.baseline.correct_rate) + "</td></tr>";
     });
     cityEl.innerHTML =
       "<h2>By city</h2><table><thead><tr><th>city</th><th>n</th>" +
-      "<th>model median error</th><th>baseline median error</th></tr></thead>" +
+      "<th>model mean error</th><th>baseline mean error</th>" +
+      "<th>model median error</th><th>baseline median error</th>" +
+      "<th>model decision accuracy</th><th>baseline decision accuracy</th></tr></thead>" +
       "<tbody>" + rows + "</tbody></table>";
   }
 
