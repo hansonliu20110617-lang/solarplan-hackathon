@@ -205,6 +205,29 @@ def validate(predictions, test_meta):
         for i in worst_idx
     ]
 
+    # Full per-day table (every held-out test row, not just the worst 5) --
+    # powers the interactive "try a day" explorer in interface/template.html.
+    # Decisions reuse the exact same oracle/model/baseline >= threshold
+    # comparison as _decision_simulation above, just kept per-row instead of
+    # reduced to a rate, so nothing here is a second, inconsistent definition.
+    oracle_all = true_kwh >= thresholds
+    model_decision_all = model_pred_kwh >= thresholds
+    baseline_decision_all = baseline_pred_kwh >= thresholds
+    all_cases = [
+        {
+            "city": str(cities[i]),
+            "date": str(test_meta["date"][i]),
+            "true": float(true_kwh[i]),
+            "pred": float(model_pred_kwh[i]),
+            "baseline_pred": float(baseline_pred_kwh[i]),
+            "threshold": float(thresholds[i]),
+            "oracle_decision": bool(oracle_all[i]),
+            "model_decision": bool(model_decision_all[i]),
+            "baseline_decision": bool(baseline_decision_all[i]),
+        }
+        for i in range(n)
+    ]
+
     model_stats = _error_stats(kwh_model_errors)
     baseline_stats = _error_stats(kwh_baseline_errors)
     skill_score = _skill_score(kwh_model_errors, kwh_baseline_errors)
@@ -227,6 +250,7 @@ def validate(predictions, test_meta):
         "decision": decision,
         "per_city": per_city,
         "cases": cases,
+        "all_cases": all_cases,
     }
 
 

@@ -479,14 +479,20 @@ run_learning_curve.py      the properly controlled generalization check,
 Run the official 3-city demo with:
 
 ```
+pip install -r requirements.txt   # just numpy, pinned
 python run_pipeline.py
 ```
 
-then open `interface/result.html`. Run the full ten-fold walk-forward
+then open `interface/result.html` — a dark, static page (no backend, works
+from `file://`) with a "Try a Day" explorer: pick any city and any real
+held-out test date and see the naive baseline's call, SolarPlan's call, and
+what actually happened, side by side. Run the full ten-fold walk-forward
 (a few minutes, ten full train/val/test cycles):
 
 ```
 python run_walkforward.py
+python pipeline/estimate_impact.py   # optional: $/household and kg CO2/household
+                                      # per year, shown on result.html if present
 ```
 
 Run the controlled generalization study (longer — 27 training runs per
@@ -496,8 +502,8 @@ holdout city):
 python run_learning_curve.py --holdout-city miami    # or phoenix/seattle/minneapolis
 ```
 
-No installs beyond numpy (Python's standard library handles CSV parsing and
-the NASA POWER download).
+No installs beyond numpy, pinned in `requirements.txt` (Python's standard
+library handles CSV parsing and the NASA POWER download).
 
 The generic five-stage *pattern* (not this project's content) was scaffolded
 before kickoff, which the hackathon rules explicitly allow ("you're welcome

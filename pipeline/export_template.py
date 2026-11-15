@@ -16,6 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(HERE)
 RESULTS_PATH = os.path.join(HERE, "validation_results.json")
 METRICS_PATH = os.path.join(HERE, "metrics_summary.json")
+IMPACT_PATH = os.path.join(HERE, "impact_estimate.json")
 TEMPLATE_PATH = os.path.join(PROJECT_ROOT, "interface", "template.html")
 OUTPUT_PATH = os.path.join(PROJECT_ROOT, "interface", "result.html")
 
@@ -37,6 +38,15 @@ def build_payload():
     if os.path.exists(METRICS_PATH):
         with open(METRICS_PATH) as f:
             payload["metrics_summary"] = json.load(f)
+
+    # impact_estimate.json comes from pipeline/estimate_impact.py, which
+    # reads the ten walk-forward fold files (run_walkforward.py) -- a
+    # separate, slower step from this quick single-split pipeline. Same
+    # optional-merge pattern as metrics_summary.json: include it if someone
+    # has run that step, but the page must render fine without it.
+    if os.path.exists(IMPACT_PATH):
+        with open(IMPACT_PATH) as f:
+            payload["impact_estimate"] = json.load(f)
 
     return payload
 

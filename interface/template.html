@@ -3,55 +3,140 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Solar Forecast Results</title>
+<title>SolarPlan — Results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --ink: #f4f6f8;
+    --muted: rgba(244,246,248,.55);
+    --gold: #F59E0B;
+    --emerald: #34d399;
+    --coral: #ff6b5b;
+    --bg: #070B14;
+    --card: rgba(17,24,39,.68);
+    --border: rgba(255,255,255,.1);
+    --mono: 'JetBrains Mono', Consolas, 'SFMono-Regular', Menlo, monospace;
+    --sans: 'Inter', -apple-system, 'Segoe UI', Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+  }
   body {
-    font-family: -apple-system, Segoe UI, Arial, sans-serif;
-    max-width: 760px;
-    margin: 2rem auto;
-    padding: 0 1rem;
-    color: #1a1a1a;
-    background: #ffffff;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
   }
-  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-  #summary {
-    font-size: 1.1rem;
-    background: #f4f6f8;
-    border: 1px solid #d8dde2;
-    border-radius: 6px;
-    padding: 0.9rem 1rem;
-    margin: 1rem 0;
+  .gridbg {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 48px 48px;
   }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.95rem;
+  header { margin-bottom: 32px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 3px;
+    color: var(--gold); text-transform: uppercase;
   }
-  th, td {
-    border: 1px solid #d8dde2;
-    padding: 0.4rem 0.6rem;
-    text-align: right;
+  h1 { font-size: 34px; font-weight: 800; margin: 8px 0 4px; }
+  .subtitle { color: var(--muted); font-size: 15px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 28px;
+    margin: 20px 0;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
+  .card h2 {
+    font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 16px;
+  }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 28px; }
+  .stat { min-width: 140px; }
+  .stat .big { font-family: var(--mono); font-size: 28px; font-weight: 700; }
+  .stat .label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .pos { color: var(--emerald); } .neg { color: var(--coral); } .warn { color: var(--gold); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--border); }
   th:first-child, td:first-child { text-align: left; }
-  thead th { background: #eef1f4; }
-  tbody tr:nth-child(even) { background: #fafbfc; }
-  footer {
-    margin-top: 1.5rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid #d8dde2;
-    font-size: 0.85rem;
-    color: #555;
+  thead th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+  tbody tr:hover { background: rgba(255,255,255,.03); }
+  .mono { font-family: var(--mono); }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono);
+    font-size: 13px; font-weight: 700; letter-spacing: 1px; padding: 6px 14px;
+    border-radius: 999px; border: 1px solid; white-space: nowrap;
   }
-  .error-note { color: #b00020; }
+  .badge.solar { color: var(--emerald); border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.1); }
+  .badge.grid { color: var(--coral); border-color: rgba(255,107,91,.4); background: rgba(255,107,91,.1); }
+  .sim-controls { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  .sim-controls label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; letter-spacing: 1px; text-transform: uppercase; }
+  select {
+    background: rgba(255,255,255,.06); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 14px; min-width: 180px;
+  }
+  .sim-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .sim-col {
+    border: 1px solid var(--border); border-radius: 12px; padding: 18px; text-align: center;
+    background: rgba(255,255,255,.02);
+  }
+  .sim-col .who { font-family: var(--mono); font-size: 12px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
+  .sim-col .reading { font-family: var(--mono); font-size: 22px; font-weight: 700; margin-top: 10px; }
+  .sim-col .verdict { margin-top: 6px; font-size: 13px; }
+  .sim-col.correct { border-color: rgba(52,211,153,.35); }
+  .sim-col.wrong { border-color: rgba(255,107,91,.35); }
+  .assumptions { font-size: 13px; color: var(--muted); margin-top: 16px; line-height: 1.6; }
+  footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+  .error-note { color: var(--coral); }
+  @media (max-width: 640px) {
+    .sim-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
+<div class="gridbg"></div>
+<header>
+  <div class="eyebrow">SolarPlan &middot; AI &amp; Climate Track</div>
   <h1>Solar Forecast Results</h1>
-  <div id="summary">Loading...</div>
-  <div id="baseline-compare"></div>
-  <div id="decision-sim"></div>
-  <div id="city-breakdown"></div>
+  <div class="subtitle" id="subtitle">Loading real, held-out validation results&hellip;</div>
+</header>
+
+<div class="card" id="summary-card"><div id="summary">Loading...</div></div>
+<div id="baseline-compare"></div>
+<div id="decision-sim"></div>
+
+<div class="card" id="simulator-card" style="display:none;">
+  <h2>Try a Day &middot; pick a real held-out test date</h2>
+  <div class="sim-controls">
+    <div>
+      <label for="sim-city">City</label>
+      <select id="sim-city"></select>
+    </div>
+    <div>
+      <label for="sim-date">Date (held out, never trained on)</label>
+      <select id="sim-date"></select>
+    </div>
+  </div>
+  <div class="sim-grid" id="sim-grid"></div>
+  <div class="assumptions" id="sim-footnote"></div>
+</div>
+
+<div id="city-breakdown"></div>
+
+<div class="card" id="impact-card" style="display:none;">
+  <h2>Real-world impact &middot; per household, per year</h2>
+  <div id="impact-body"></div>
+</div>
+
+<div class="card">
   <h2>Worst-case examples</h2>
   <table id="cases-table">
     <thead>
@@ -59,7 +144,9 @@
     </thead>
     <tbody></tbody>
   </table>
-  <footer id="provenance"></footer>
+</div>
+
+<footer id="provenance"></footer>
 
 <script>
 window.RESULTS_DATA = __RESULTS_JSON__;
@@ -67,6 +154,7 @@ window.RESULTS_DATA = __RESULTS_JSON__;
 (function () {
   var data = window.RESULTS_DATA;
   var summaryEl = document.getElementById("summary");
+  var subtitleEl = document.getElementById("subtitle");
   var tbody = document.querySelector("#cases-table tbody");
   var footerEl = document.getElementById("provenance");
 
@@ -74,40 +162,116 @@ window.RESULTS_DATA = __RESULTS_JSON__;
     summaryEl.textContent = "No results data found.";
     return;
   }
+  subtitleEl.textContent = "Validated against " + data.n_cases + " real, held-out daily readings never seen during training.";
 
   function fmt(n) {
     return (typeof n === "number") ? n.toFixed(4) : String(n);
   }
+  function pct(n) {
+    return (typeof n === "number") ? (n * 100).toFixed(1) + "%" : String(n);
+  }
+  function fmtKwh(n) {
+    return (typeof n === "number") ? n.toFixed(2) : String(n);
+  }
 
   summaryEl.innerHTML =
-    "Validated " + data.n_cases + " held-out 2024 case(s), never seen during training &mdash; " +
-    "model median error: <strong>" + fmt(data.median_error) + "</strong> kWh/m&sup2;/day, " +
-    "95th percentile: <strong>" + fmt(data.p95_error) + "</strong>, " +
-    "worst case: <strong class=\"error-note\">" + fmt(data.worst_error) + "</strong>.";
+    "<div class=\"stat-row\">" +
+    "<div class=\"stat\"><div class=\"big\">" + data.n_cases + "</div><div class=\"label\">held-out cases</div></div>" +
+    "<div class=\"stat\"><div class=\"big\">" + fmt(data.median_error) + "</div><div class=\"label\">model median error (kWh/m&sup2;)</div></div>" +
+    "<div class=\"stat\"><div class=\"big\">" + fmt(data.p95_error) + "</div><div class=\"label\">95th percentile error</div></div>" +
+    "<div class=\"stat\"><div class=\"big error-note\">" + fmt(data.worst_error) + "</div><div class=\"label\">worst case</div></div>" +
+    "</div>";
 
   var compareEl = document.getElementById("baseline-compare");
   if (typeof data.baseline_median_error === "number") {
     var beats = data.beats_baseline;
     compareEl.innerHTML =
-      "<div id=\"summary\"><strong>Baseline check</strong> &mdash; persistence baseline " +
-      "(\"tomorrow = today\") median error: <strong>" + fmt(data.baseline_median_error) + "</strong>. " +
-      "Our model " + (beats ? "<strong>beats</strong>" : "<span class=\"error-note\">does not beat</span>") +
-      " the baseline on median error.</div>";
-  }
-
-  function pct(n) {
-    return (typeof n === "number") ? (n * 100).toFixed(1) + "%" : String(n);
+      "<div class=\"card\"><h2>Baseline check</h2>" +
+      "Persistence baseline (\"tomorrow = today\") median error: <strong class=\"mono\">" + fmt(data.baseline_median_error) + "</strong>. " +
+      "Our model " + (beats ? "<strong class=\"pos\">beats</strong>" : "<span class=\"error-note\">does not beat</span>") +
+      " the baseline on median error alone &mdash; see the decision accuracy below for the metric that actually matters here.</div>";
   }
 
   var decisionEl = document.getElementById("decision-sim");
   if (data.decision) {
     var d = data.decision;
     decisionEl.innerHTML =
-      "<div id=\"summary\"><strong>The decision that actually matters</strong> &mdash; " +
-      "\"enough sun to run a high-draw appliance off solar tonight, or charge from the grid?\" " +
+      "<div class=\"card\"><h2>The decision that actually matters</h2>" +
+      "\"Enough sun to run a high-draw appliance off solar tonight, or charge from the grid?\" " +
       "Our model's yes/no call matched what the homeowner should have actually done " +
-      "<strong>" + pct(d.model.correct_rate) + "</strong> of the time, vs. " +
-      "<strong>" + pct(d.baseline.correct_rate) + "</strong> for the naive persistence rule.</div>";
+      "<strong class=\"pos mono\">" + pct(d.model.correct_rate) + "</strong> of the time, vs. " +
+      "<strong class=\"mono\">" + pct(d.baseline.correct_rate) + "</strong> for the naive persistence rule " +
+      "(majority-class floor: " + pct(d.majority_class_accuracy) + ").</div>";
+  }
+
+  // ---- Try a Day simulator ----
+  var allCases = data.all_cases || [];
+  if (allCases.length) {
+    var simCard = document.getElementById("simulator-card");
+    var citySel = document.getElementById("sim-city");
+    var dateSel = document.getElementById("sim-date");
+    var grid = document.getElementById("sim-grid");
+    var byCity = {};
+    allCases.forEach(function (c) {
+      (byCity[c.city] = byCity[c.city] || []).push(c);
+    });
+    Object.keys(byCity).forEach(function (c) { byCity[c].sort(function (a, b) { return a.date < b.date ? -1 : 1; }); });
+    var cities = Object.keys(byCity).sort();
+    cities.forEach(function (c) {
+      var opt = document.createElement("option");
+      opt.value = c; opt.textContent = c.charAt(0).toUpperCase() + c.slice(1);
+      citySel.appendChild(opt);
+    });
+
+    function decisionBadge(flag) {
+      return flag
+        ? "<span class=\"badge solar\">&#9728; WAIT FOR SOLAR</span>"
+        : "<span class=\"badge grid\">&#9889; GRID TONIGHT</span>";
+    }
+
+    function renderDates() {
+      dateSel.innerHTML = "";
+      byCity[citySel.value].forEach(function (c) {
+        var opt = document.createElement("option");
+        opt.value = c.date; opt.textContent = c.date;
+        dateSel.appendChild(opt);
+      });
+    }
+
+    function renderCase() {
+      var rows = byCity[citySel.value];
+      var row = rows.filter(function (c) { return c.date === dateSel.value; })[0] || rows[0];
+      var oracle = row.oracle_decision;
+      function col(who, decision, reading, color, isActual) {
+        var correct = decision === oracle;
+        return "<div class=\"sim-col " + (isActual ? "correct" : (correct ? "correct" : "wrong")) + "\">" +
+          "<div class=\"who\">" + who + "</div>" +
+          decisionBadge(decision) +
+          "<div class=\"reading\" style=\"color:" + color + ";\">" + fmtKwh(reading) + " kWh/m&sup2;</div>" +
+          "<div class=\"verdict\">" + (isActual ? "&nbsp;" : (correct ? "&#10003; matched reality" : "&#10007; got it wrong")) + "</div>" +
+          "</div>";
+      }
+      grid.innerHTML =
+        col("NAIVE (BASELINE)", row.baseline_decision, row.baseline_pred, "#ff6b5b") +
+        col("SOLARPLAN (MODEL)", row.model_decision, row.pred, "#F59E0B") +
+        col("ACTUAL OUTCOME", oracle, row.true, "#34d399", true);
+      document.getElementById("sim-footnote").innerHTML =
+        "Decision threshold for " + citySel.value + " that day: <span class=\"mono\">" + fmtKwh(row.threshold) +
+        " kWh/m&sup2;</span> (each city's own median training-period irradiance &mdash; never peeks at test data).";
+    }
+
+    citySel.addEventListener("change", function () { renderDates(); renderCase(); });
+    dateSel.addEventListener("change", renderCase);
+
+    // Default to the Seattle / Aug 13 2024 case when present -- the one
+    // walked through in the demo video -- else just the first city/date.
+    if (byCity["seattle"]) { citySel.value = "seattle"; }
+    renderDates();
+    if (byCity[citySel.value].some(function (c) { return c.date === "2024-08-13"; })) {
+      dateSel.value = "2024-08-13";
+    }
+    renderCase();
+    simCard.style.display = "";
   }
 
   var cityEl = document.getElementById("city-breakdown");
@@ -116,27 +280,57 @@ window.RESULTS_DATA = __RESULTS_JSON__;
     Object.keys(data.per_city).sort().forEach(function (city) {
       var c = data.per_city[city];
       var cd = c.decision || {};
-      rows += "<tr><td>" + city + "</td><td>" + c.n + "</td>" +
-        "<td>" + fmt(c.model.mean_error) + "</td>" +
-        "<td>" + fmt(c.baseline.mean_error) + "</td>" +
-        "<td>" + fmt(c.model.median_error) + "</td>" +
-        "<td>" + fmt(c.baseline.median_error) + "</td>" +
-        "<td>" + pct(cd.model && cd.model.correct_rate) + "</td>" +
-        "<td>" + pct(cd.baseline && cd.baseline.correct_rate) + "</td></tr>";
+      rows += "<tr><td>" + city + "</td><td class=\"mono\">" + c.n + "</td>" +
+        "<td class=\"mono\">" + fmt(c.model.mean_error) + "</td>" +
+        "<td class=\"mono\">" + fmt(c.baseline.mean_error) + "</td>" +
+        "<td class=\"mono pos\">" + pct(cd.model && cd.model.correct_rate) + "</td>" +
+        "<td class=\"mono\">" + pct(cd.baseline && cd.baseline.correct_rate) + "</td></tr>";
     });
     cityEl.innerHTML =
-      "<h2>By city</h2><table><thead><tr><th>city</th><th>n</th>" +
+      "<div class=\"card\"><h2>By city</h2><table><thead><tr><th>city</th><th>n</th>" +
       "<th>model mean error</th><th>baseline mean error</th>" +
-      "<th>model median error</th><th>baseline median error</th>" +
       "<th>model decision accuracy</th><th>baseline decision accuracy</th></tr></thead>" +
-      "<tbody>" + rows + "</tbody></table>";
+      "<tbody>" + rows + "</tbody></table></div>";
+  }
+
+  // ---- Real-world impact (only if pipeline/estimate_impact.py has been run) ----
+  var impactEl = document.getElementById("impact-card");
+  var impactBody = document.getElementById("impact-body");
+  if (data.impact_estimate) {
+    var imp = data.impact_estimate;
+    var rows2 = "";
+    Object.keys(imp.per_city).sort().forEach(function (city) {
+      var c = imp.per_city[city];
+      rows2 += "<tr><td>" + city + "</td>" +
+        "<td class=\"mono pos\">+$" + c.annual_savings_usd.toFixed(2) + "</td>" +
+        "<td class=\"mono pos\">+" + c.annual_kwh_shifted_to_solar.toFixed(0) + " kWh</td>" +
+        "<td class=\"mono pos\">+" + c.annual_co2_avoided_kg.toFixed(0) + " kg CO2</td></tr>";
+    });
+    impactBody.innerHTML =
+      "<div class=\"stat-row\" style=\"margin-bottom:20px;\">" +
+      "<div class=\"stat\"><div class=\"big pos\">+$" + imp.pooled_avg_savings_per_household_per_year_usd.toFixed(2) + "</div>" +
+      "<div class=\"label\">avg savings / household / yr</div></div>" +
+      "<div class=\"stat\"><div class=\"big pos\">+" + imp.pooled_avg_co2_avoided_kg_per_household_per_year.toFixed(0) + " kg</div>" +
+      "<div class=\"label\">avg CO2 avoided / household / yr</div></div>" +
+      "</div>" +
+      "<table><thead><tr><th>city</th><th>$ saved / yr</th><th>kWh shifted to solar / yr</th><th>CO2 avoided / yr</th></tr></thead>" +
+      "<tbody>" + rows2 + "</tbody></table>" +
+      "<div class=\"assumptions\">Illustrative, stated assumptions, not measured: " +
+      imp.assumptions.appliance_kwh_per_day + " kWh/day high-draw appliance load, $" +
+      imp.assumptions.retail_price_per_kwh + "/kWh retail rate, " +
+      imp.assumptions.false_confidence_multiplier + "&times; cost multiplier for an unplanned grid top-up, " +
+      imp.assumptions.grid_co2_kg_per_kwh + " kg CO2/kWh grid emissions intensity. Source: " + imp.assumptions.source +
+      ". Averaged across all ten independent walk-forward validation years &mdash; change these assumptions and " +
+      "re-run <span class=\"mono\">pipeline/estimate_impact.py</span> if you have better numbers.</div>";
+    impactEl.style.display = "";
   }
 
   (data.cases || []).forEach(function (c) {
     var row = document.createElement("tr");
-    [c.city, c.date, fmt(c.true), fmt(c.pred), fmt(c.baseline_pred), fmt(c.error)].forEach(function (val) {
+    [c.city, c.date, fmt(c.true), fmt(c.pred), fmt(c.baseline_pred), fmt(c.error)].forEach(function (val, i) {
       var cell = document.createElement("td");
       cell.textContent = val;
+      if (i > 1) cell.className = "mono";
       row.appendChild(cell);
     });
     tbody.appendChild(row);
@@ -144,7 +338,7 @@ window.RESULTS_DATA = __RESULTS_JSON__;
 
   var provenance = data.provenance || {};
   footerEl.innerHTML =
-    "<strong>How this was validated:</strong> " + (data.source || "unknown source") + ". " +
+    "<strong>How this was validated:</strong> " + (data.source || "unknown source") + " " +
     (provenance.predictions_source ? "Predictions from " + provenance.predictions_source + ". " : "") +
     (provenance.note || "");
 })();
