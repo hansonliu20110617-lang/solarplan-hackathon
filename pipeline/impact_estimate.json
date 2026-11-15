@@ -1,0 +1,37 @@
+{
+  "assumptions": {
+    "appliance_kwh_per_day": 10.0,
+    "retail_price_per_kwh": 0.165,
+    "false_confidence_multiplier": 2.0,
+    "grid_co2_kg_per_kwh": 0.385,
+    "source": "EIA 2024 US average residential electricity price, 16.5 cents/kWh; EPA eGRID national average grid emissions intensity, ~0.385 kg CO2/kWh"
+  },
+  "per_city": {
+    "chicago": {
+      "model_annual_cost_usd": 158.28729508196724,
+      "baseline_annual_cost_usd": 184.9906967213115,
+      "annual_savings_usd": 26.703401639344264,
+      "annual_kwh_shifted_to_solar": 125.89890710382514,
+      "annual_co2_avoided_kg": 48.47107923497268,
+      "n_folds": 10
+    },
+    "phoenix": {
+      "model_annual_cost_usd": 71.38774590163935,
+      "baseline_annual_cost_usd": 80.12418032786887,
+      "annual_savings_usd": 8.736434426229522,
+      "annual_kwh_shifted_to_solar": 20.975409836065555,
+      "annual_co2_avoided_kg": 8.075532786885239,
+      "n_folds": 10
+    },
+    "seattle": {
+      "model_annual_cost_usd": 115.90754098360658,
+      "baseline_annual_cost_usd": 133.38581967213116,
+      "annual_savings_usd": 17.478278688524583,
+      "annual_kwh_shifted_to_solar": 99.91256830601093,
+      "annual_co2_avoided_kg": 38.46633879781421,
+      "n_folds": 10
+    }
+  },
+  "pooled_avg_savings_per_household_per_year_usd": 17.639371584699457,
+  "pooled_avg_co2_avoided_kg_per_household_per_year": 31.670983606557375
+}
